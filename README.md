@@ -35,4 +35,11 @@ crest starting_geometry.xyz --opt --gfn2 -T 36 > crst_opt.out &
 crest starting_geometry_opt.xyz --msreact --msmolbar -T 36 > crst_samp.out &
 crest starting_geometry_opt.xyz --msreact --msnshifts 5000 --msnshifts2 50 --msmolbar --msiso -T 36 --ewin 500.0 > crst_samp.out &&
 ```
-* The keyword `--msiso` tells crest to collect the unique isomers that it identifies in the `isomers.xyz` trajectory file
+* The keyword `--msiso` tells CREST to collect the unique isomers that it identifies in the `isomers.xyz` trajectory file.
+* If using an older version of CREST (< 3.0), you can set up different metadynamics simulation in subfolders CWD/MD_PATH/metadyn1, CWD/MD_PATH/metadyn2 etc. The prefix of the metadynamics subfolders must be always the same (e.g. "metadyn" in this case. A few parameters need to be tweaked in `explorer.py`:
+  * in the function `unite_xyz`, the name of the CREST output file is hard coded and is currently set to crest_products.xyz. Make sure it is correct.
+  * in the `main` function, edit the variables `crest_version`, `md_path` (the relative path to MD_PATH is sufficient) and `crest_out_name`. This last argument is set to "isomers.xyz" for the newer CREST version (> 3.0), but needs to be set to the prefix of the metadynamics subfolders, in this case "metadyn".
+* In the `main` function, the calls to the functions can be commented to run the script step by step, or left as is to perform all the steps at the same time.
+* `explorer.py` is called from CWD, and here all the intermediate and output files and subfolders will be generated. It is suggested to comment the last function that calls for the GSM runs initially, to make sure that the previous results are satisfactory.
+* Currently, `explorer.py` runs the GSM sfotware through a bash script placed in the `bin` that sends the job to a queue management system. "rungsm" can be replaced with any other command or script that executes the GSM. The counter that follows refers to the index of the GSM input files, without the preceeding zeros (GSM input files are in the form "name_of_file_0001.xyz".
+* the variable model_data_gsm must be the path to the model data folder that contains the necessary files for setting up the GSM calculation.
