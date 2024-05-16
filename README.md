@@ -17,4 +17,22 @@ PESxplorer exploits existing software from the literature to achieve the identif
 * CREST, short for Conformer-Rotamer Ensemble Sampling Tool, is a utility and driver program for the semiempirical quantum chemistry package. Its functionalities include but are not limited to: conformational sampling, ensemble sorting, costrained sampling, protonation site calculation and conforomational entropy calculation. For more details, the documentation can be found [here](https://crest-lab.github.io/crest-docs/page/examples). The [installation guide](https://crest-lab.github.io/crest-docs/page/installation/install_compile.html) can be followed to compile from source code.
 * GSM, the Growng String Method is a reaction path (RP) and transition state (TS) finding method that develops a RP by iteratively adding new nodes (each node is a chemical structure along the RP) and optimizing them until a complete RP with a TS and a stable intermediate on each side of the string are present. More details and instructions on installing and running the code can be found [here](https://github.com/ZimmermanGroup/molecularGSM/wiki)
 * [Gaussian](https://gaussian.com/). It is used by thr GSM to compute energy gradients. It can be replaced with another electronic structure calculations software, as the GSM allows to interface with MOLPRO, QCHEM, MOPAC, ASE or GAUSSIAN.
-* python v.3.7 or higher. That's the python version I employed. I tried to limit the use of python libraries at first so that the scripts could be called wihtout any need for a specific environment, but after the latest modifications that might not hold true anymore.
+* Python v.3.7 or higher. That's the python version I used, but I limited the use of python libraries so there shouldn'r be any compatibility problems with Python version > 3.0
+
+## WORKFLOW
+The main working directory will be referred to as CWD.
+### User input
+* In CWD, generate a subfolder in which all CREST calculations and output files will be collected: CWD/MD_PATH
+* Go into MD_PATH and create the necessary input files for CREST:
+  * `starting_geometry.xyz` : it contains the cartesian coordinates of the initial structure (it could be found online or generated with RDKIT starting from InChI, SMILES or MOLBLOCK file of a molecule.
+  * `.UHF` and `.CHRG` : contain spin and charge of the molecule. necessary only if not default (0 for both spin and charge)
+* Consider running an initial optimization of your structure
+```bash
+crest starting_geometry.xyz --opt --gfn2 -T 36 > crst_opt.out &
+```
+* Run the `MSREACT` protocol with either of the following commands taken from the official documentation of CREST (the second one could be used for more complex systems, but trying them both is possible, as the outputs can be manually combined in a unique file. --T is the number of cores used by the software.
+```bash
+crest starting_geometry_opt.xyz --msreact --msmolbar -T 36 > crst_samp.out &
+crest starting_geometry_opt.xyz --msreact --msnshifts 5000 --msnshifts2 50 --msmolbar --msiso -T 36 --ewin 500.0 > crst_samp.out &&
+```
+* The keyword `--msiso` tells crest to collect the unique isomers that it identifies in the `isomers.xyz` trajectory file
