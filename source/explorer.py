@@ -1,12 +1,16 @@
 # Automatic exploration of a general PES from CREST metadynamics output
-# 26/04/24
+# 26/05/24
 # Andrea Della Libera
+
+# IN PROGRESS: #
+# 1. Interface with molgen output
 
 # TO DO: #
 # 1. Crivello di Eratostene in bond_check x scalabilità
 # 2. Eliminare ridondanze calcolo permutazioni
 # 3. Eliminare ridondanze calcolo matrice distanze
 # 4. Formatta meglio logfile
+# 5. Generalize once more CREST output reading as even with new version more iterations are required! 
 
 # Modules to be imported
 import os
@@ -137,6 +141,40 @@ def is_single_molecule(graph):
 #############################
 
 # Functions
+
+# 1.b Get structures from MOLGEN output and also consider bimolecular products
+# TODO, test needed, I believe there is still something wrong
+def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):   
+    isomers = []
+    n_isom = 0
+    
+    xyz_list = [fil for fil in os.listdir(xyz_folder) if suffix in fil]
+
+    with open(xyz_folder+xyz_list[0],'r') as f:
+        lines = [line.strip() for line in f.readlines()]
+    n_atoms = int(lines[0])
+    # Write logfile here
+    write_log(xyz_folder+xyz_list[0])
+    write_log(f'n atoms: {n_atoms}')
+    with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
+
+    for xyzfil in xyz_list:
+        write_log('Working on: '+xyzfil)
+        with open(xyz_folder+xyzfil,'r') as f:
+            lines = [line.strip() for line in f.readlines()]
+        for i,line in enumerate(lines):
+            try:
+                n_at = int(line)
+                if n_at == n_atoms:
+                    isomers.append([li for li in lines[i:i+n_atoms+2]])
+                    n_isom += 1
+                    write_log('New isomer! n isom '+str(n_isom))
+                else:
+                    pass
+            except:
+                pass
+    write_xyzlist(isomers,'allcrestprods_unite.xyz')
+
 
 # 1. Unite metadynamics results in one single text file and create list of isomers
 #    Names of md folders should all have the same root name
@@ -432,31 +470,36 @@ def run_gsm():
 
 def main():
     at_num = {'1':'H','6':'C','8':'O','7':'N'}
-    model_gsm = '/PATH/TO/GSM/MODEL/DATA/FOLDER/*'
-    # 3.0 is threshold for chooising how to collect CREST output
-    crest_version = '3.0'
-    # Folder containing metadyns subdir (if version < 3.0)
-    # or output files (if version >= 3.0)
-    crest_md_path = 'crest_metadyns/'
-    # root name of metadyns folders (if version < 3.0)
-    # or name of the output file containing isomers only (if version >= 3.0)
-    crest_out_name = 'isomers.xyz'
+
+    # Read input information
+    with open("input.dat","r") as f:
+        lines = [line.strip() for line in f.readlines() if (
+                 line and not line.strip().startswith('#'))]
+        
+    config = {l.split('=')[0].strip():l.split('=')[1].strip() for l in lines}
+    
+    model_gsm = config['model_gsm']
+    crest_version = config['crest_version']
+    crest_md_path = config['crest_md_path']
+    crest_out_name = config['crest_out_name']
 
     open('logfile.out','w').close() # Create logfile
 
-#### 1 ###
+ #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
+
+# #### 1 ###
     unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
-#### 2 ###
-    _,_,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-    _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-    bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
-    sel_paths('perm_bondcheck.xyz')
-#### 3 ###
-    filter_gsm('gsm_global.txt')
-    setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
-#### 4 ###
-   run_gsm()
+#     sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+# #### 2 ###
+#     _,_,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+#     _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+#     bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+#     sel_paths('perm_bondcheck.xyz')
+# #### 3 ###
+#     filter_gsm('gsm_global.txt')
+#     setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
+# #### 4 ###
+#     run_gsm()
 
 if __name__=="__main__":
     main()
