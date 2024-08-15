@@ -1,0 +1,9 @@
+model_gsm = /PATH/TO/GSM/MODEL/DATA/FOLDER/*
+    # 3.0 is threshold for chooising how to collect CREST output
+    crest_version = '3.0'
+    # Folder containing metadyns subdir (if version < 3.0)
+    # or output files (if version >= 3.0)
+  crest_md_path = crest_metadyns/
+    # root name of metadyns folders (if version < 3.0)
+# or name of the output file containing isomers only (if version >= 3.0)
+crest_out_name = isomers.xyz
