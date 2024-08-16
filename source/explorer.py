@@ -14,6 +14,7 @@
 
 # Modules to be imported
 import os
+import subprocess
 from itertools import permutations
 import csv
 import math as m
@@ -138,6 +139,43 @@ def is_single_molecule(graph):
     dfs(graph, start_vertex, visited)
     return len(visited) == len(graph)
 
+#j. Setup CREST calculation
+# Need to manually create .CHRG and .UHF file if not default (singlet no charge)
+# Numbering as molpro
+def crest_calc(filename, calc_type):
+    # Setup crest subfolder
+    crest_dir_prefix = "crest_calc"
+    dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
+    folder_nums = []
+    if not dirs_lst: crest_dir = crest_dir_prefix+"_1"
+    else:
+        for direc in dirs_lst:
+            folder_nums.append(int(direc.split("_")[2])) 
+        crest_dir = f"{crest_dir_prefix}_{max(folder_nums) + 1}"
+    os.system(f"mkdir -p {crest_dir}") 
+    print(f"\n####\nWorking in {crest_dir}\n####\n")
+
+    if calc_type == 'sp':
+        command = 'crest --for INPUT --prop singlepoint --ewin 10000. --notopo &> crest_ouput.out'
+        command = command.replace('INPUT',f'{filename}')
+        outfile = 'crest_ensemble.xyz'
+    else:
+        print(f'CREST calculation type {calc_type} is not currently defined')
+
+    crest_check = f'''cp {filename} {crest_dir}
+                cat .CHRG > {crest_dir}/.CHRG
+                cat .UHF > {crest_dir}/.UHF
+                cd {crest_dir}
+                {command}
+                '''
+    p = subprocess.Popen(crest_check, stdout=subprocess.PIPE, shell=True)
+    output, err = p.communicate()
+    p_status = p.wait()
+
+    os.system(f"cp {crest_dir}/{outfile} .") 
+
+    return
+
 #############################
 
 # Functions
@@ -235,7 +273,13 @@ def sort_xyz(filinp):
         n_atoms = int(f.read())
     isomers = read_xyzlist(filinp,n_atoms)
     # Sort by energy
-    isomers.sort(key=lambda x:float(x[1].split()[0]))
+    if isomers[0][1] != '':
+        isomers.sort(key=lambda x:float(x[1].split()[0]))
+    else:
+        crest_calc(filinp,'sp')
+        os.system(f'mv crest_ensemble.xyz {filinp}_sp')
+        isomers = read_xyzlist(f'{filinp}_sp',n_atoms)
+        isomers.sort(key=lambda x:float(x[1].split()[0]))
     write_xyzlist(isomers,'allcrestprods_sort.xyz')
 
 # 3. Select unique isomers using distance matrix
@@ -474,8 +518,9 @@ def main():
     # Read input information
     with open("input.dat","r") as f:
         lines = [line.strip() for line in f.readlines() if (
-                 line and not line.strip().startswith('#'))]
+                 line.strip() != '' and not line.strip().startswith('#'))]
         
+    print(lines)
     config = {l.split('=')[0].strip():l.split('=')[1].strip() for l in lines}
     
     model_gsm = config['model_gsm']
@@ -489,7 +534,7 @@ def main():
 
 # #### 1 ###
     unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-#     sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
 # #### 2 ###
 #     _,_,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
 #     _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
