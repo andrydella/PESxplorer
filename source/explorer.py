@@ -153,7 +153,7 @@ def crest_calc(filename, calc_type):
             folder_nums.append(int(direc.split("_")[2])) 
         crest_dir = f"{crest_dir_prefix}_{max(folder_nums) + 1}"
     os.system(f"mkdir -p {crest_dir}") 
-    print(f"\n####\nWorking in {crest_dir}\n####\n")
+    write_log(f"\n####\nWorking in {crest_dir}\n####\n")
 
     if calc_type == 'sp':
         command = 'crest --for INPUT --prop singlepoint --ewin 10000. --notopo &> crest_ouput.out'
@@ -298,7 +298,7 @@ def bond_check(filinp,at_num):
         for j in range(i+1,len(conn_mat)):
             is_same = [ x for x in map(lambda x,y: x==y, el,conn_mat[j]) if x==0]
             if not is_same: equal_pairs.add((i,j))
-            # Add +1 for correspondence with molden which starts from 1
+            # Mentally add +1 for correspondence with molden which starts from 1
 
     if list(equal_pairs) is not []: write_log(['%s %s\n' % x for x in equal_pairs])
     # Get rid of doubles (use set to include only uniques)
@@ -350,12 +350,15 @@ def bond_check3(filinp):
     with open('natoms_unite.txt','r') as f:
         n_atoms = int(f.read())
     isomers = read_xyzlist(filinp,n_atoms)
+    _,conn_mat,_ = conn_dist(isomers)
 
     write_log('\nEntering permutations loop..:\n')
     for k,isomer in enumerate(isomers):
+        write_log(f'Working on isomer {k}\n')
         prefix = [el for el in isomer[:2]]
         # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:])
+        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:],conn_mat[k])
+        write_log(f'Number of permutations {len(isom_k_permuts)}\n')
 
         for h,permutation in enumerate(isom_k_permuts):
             # Define useful variables
@@ -404,12 +407,15 @@ def sel_paths(filinp):
     with open('natoms_unite.txt','r') as f:
         n_atoms = int(f.read())
     isomers = read_xyzlist(filinp,n_atoms)
+    _,conn_mat,_ = conn_dist(isomers)
 
     write_log('\nEntering permutations loop..:\n')
     for k,isomer in enumerate(isomers):
+        write_log(f'Working on isomer {k}\n')
         prefix = [el for el in isomer[:2]]
         # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:])
+        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:],conn_mat[k])
+        write_log(f'Number of permutations {len(isom_k_permuts)}\n')
 
         for h,permutation in enumerate(isom_k_permuts):
             # Define useful variables
@@ -426,7 +432,7 @@ def sel_paths(filinp):
                 curr_bonds = [item for sublist in conn_mat_copy[i] for item in sublist]
                 is_same = [ x for x in map(lambda x,y: x==y, k_bonds,curr_bonds)]
                 #print(i+k,is_same.count(False))
-                if is_same.count(False)<3: 
+                if is_same.count(False)<5: # Up to break2form2
                     gsm_list.append([k, i, h])
                     gsm_included.add(k)
                     gsm_included.add(i)
@@ -441,7 +447,7 @@ def sel_paths(filinp):
     write_log(str(list(gsm_included)))
 
 # 6. setup_gsm from gsm_filter file and perm_bondcheck list of isomers
-# NON TIENE LO STESSO ORDINE DELLE PERMUTAZIONI CAZZO - salvo gli xyz in bond_check2
+# NON TIENE LO STESSO ORDINE DELLE PERMUTAZIONI - salvo gli xyz in bond_check3
 def setup_gsm(gsminp,isomlist,model_gsm):
 
     # Get isomers list and n atoms
@@ -520,7 +526,6 @@ def main():
         lines = [line.strip() for line in f.readlines() if (
                  line.strip() != '' and not line.strip().startswith('#'))]
         
-    print(lines)
     config = {l.split('=')[0].strip():l.split('=')[1].strip() for l in lines}
     
     model_gsm = config['model_gsm']
@@ -529,15 +534,18 @@ def main():
     crest_out_name = config['crest_out_name']
 
     open('logfile.out','w').close() # Create logfile
+    write_log(lines)
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 
 # #### 1 ###
-    unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+#    unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+#    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
 # #### 2 ###
-#     _,_,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+#     _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+#     print(connect)
 #     _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+#     os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
 #     bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
 #     sel_paths('perm_bondcheck.xyz')
 # #### 3 ###

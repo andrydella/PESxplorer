@@ -1,4 +1,5 @@
 import itertools
+import numpy as np
 from collections import defaultdict
 from typing import List, Tuple
 
@@ -20,20 +21,63 @@ def group_by_atom_type(atom_lines: List[Tuple[int, str, List[str]]]) -> dict:
     grouped = defaultdict(list)
     for idx, atom_type, coordinates in atom_lines:
         grouped[atom_type].append((idx, atom_type, coordinates))
-    
     return grouped
 
-# Step 3: Generate permutations for each group of atoms
+# Step 3:
+def prune_groups(upper_triangular,grouped):
+    def expand_conn_mat(upper_triangular):
+        # Determine the size of the matrix
+        n = len(upper_triangular)
+        # Create an n x n matrix initialized with False
+        matrix = np.full((n, n), False, dtype=bool)
+        # Populate the upper triangular part (excluding the diagonal)
+        for i, row in enumerate(upper_triangular):
+            matrix[i, i+1:] = row
+        # Mirror the upper triangular part into the lower triangular part
+        matrix = matrix | matrix.T
+        return matrix
+    
+    conn_mat = expand_conn_mat(upper_triangular)
+
+    groups = {}
+    for atom_type, atoms in grouped.items():
+        groups[atom_type] = []
+        indices = [atom[0] for atom in atoms]
+        not_yet_compared = set(indices)
+
+        while not_yet_compared:
+            idx = not_yet_compared.pop()
+            group = {idx}
+
+            for i in list(not_yet_compared):
+                if np.array_equal(conn_mat[idx],conn_mat[i]):
+                    group.add(i)
+                    not_yet_compared.remove(i)
+            groups[atom_type].append(group)
+
+    grouped_copy = defaultdict(list)
+    removed_count = defaultdict(int)
+    for atom_type, elements in groups.items():
+        for group in elements:
+            min_index = min(group)
+            removed_count[atom_type] += len(group)-1
+            for item in grouped[atom_type]:
+                if item[0] == min_index:
+                    grouped_copy[atom_type].append(item)
+                    break
+    return grouped_copy,removed_count
+
+# Step 4: Generate permutations for each group of atoms
 def generate_permutations(grouped: dict) -> dict:
     perms = {}
     for atom_type, atoms in grouped.items():
         indices = [atom[0] for atom in atoms]
         # Generate all permutations of the indices
         perms[atom_type] = list(itertools.permutations(indices))
-    
+
     return perms
 
-# Step 4: Combine permutations to create all possible configurations
+# Step 5: Combine permutations to create all possible configurations
 def combine_permutations(perms: dict, atom_lines: List[Tuple[int, str, List[str]]]) -> List[List[Tuple[int, str, List[str]]]]:
     combined_permutations = list(itertools.product(*perms.values()))
 
@@ -51,12 +95,14 @@ def combine_permutations(perms: dict, atom_lines: List[Tuple[int, str, List[str]
             for j,idx in enumerate(indices):
                 current_perm_on_atom[ref_lines[i][j]] = (
                     ref_lines[i][j],atom_lines[idx][1],atom_lines[idx][2])
+        for i,element in enumerate(current_perm_on_atom):
+            if element is None:
+                current_perm_on_atom[i] = atom_lines[i]
         
         #Sort by new index to ensure correct ordering
         new_lines = sorted(current_perm_on_atom, key=lambda x: x[0])
         all_permutations.append(new_lines)
 
-    
     return all_permutations
 
 
@@ -68,13 +114,15 @@ def format_permutations(permutations: List[List[Tuple[int, str, List[str]]]]) ->
         formatted_results.append(formatted)
     return formatted_results
 
-# Step 5: Generate all molecule permutations with the given input
-def generate_molecule_permutations(molden_str: list) -> List[List[Tuple[int, str, List[str]]]]:
+# Step 6: Generate all molecule permutations with the given input
+def generate_molecule_permutations(molden_str: list, up_tr: List[List[bool]]) -> List[List[Tuple[int, str, List[str]]]]:
     atom_lines = parse_molden_input(molden_str)
     
     # Group by atom type, retaining the original indices
     grouped = group_by_atom_type(atom_lines)
-    
+
+    grouped,removed_count = prune_groups(up_tr,grouped)
+
     # Generate permutations for the indices within each group
     perms = generate_permutations(grouped)
     
@@ -98,8 +146,6 @@ def main():
 
     # Generate all permutations for the molecule with new line arrangements
     permutations = generate_molecule_permutations(molden_str)
-    #print(permutations)
-
 
     # Display the results
     for i, perm in enumerate(permutations):
