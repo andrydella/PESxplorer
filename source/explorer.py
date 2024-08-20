@@ -460,9 +460,10 @@ def setup_gsm(gsminp,isomlist,model_gsm):
          reaction_list = list(csv.reader(f, delimiter=","))
 
     # create gsm folders
+    os.system('mkdir -p GSM_FOLDS')
     for k,isomer in enumerate(isomers):
         # Setup GSM folder
-        fold_name = f'{k}_gsm_fold'
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
         if not os.path.exists(fold_name): os.mkdir(fold_name)
         if not os.path.exists(f'{fold_name}/scratch'): os.mkdir(f'{fold_name}/scratch')
         gsm_path = os.getcwd()+f'/{fold_name}/'
@@ -471,7 +472,7 @@ def setup_gsm(gsminp,isomlist,model_gsm):
         isom_k_perm = read_xyzlist(f'perm_folder/permutations_{k}.xyz',n_atoms)
         isomers_copy = [el for el in isomers] # Duplicate list for modfying it
         # Get GSM folder name and path
-        fold_name = f'{k}_gsm_fold'
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
         gsm_path = os.getcwd()+f'/{fold_name}/'
 
         # Get list of reactions to study
@@ -495,6 +496,7 @@ def setup_gsm(gsminp,isomlist,model_gsm):
 
 # 7. run_gsm()
 def run_gsm():
+    os.chdir('GSM_FOLDS')
     gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     gsm_folds.sort()
 
@@ -539,17 +541,18 @@ def main():
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 
 # #### 1 ###
-#    unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-#    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+    unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
 # #### 2 ###
-#     _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-#     print(connect)
-#     _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-#     os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
-#     bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
-#     sel_paths('perm_bondcheck.xyz')
+    _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+    write_log("connect")
+    write_log(connect)
+    _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+    os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
+    bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+    sel_paths('perm_bondcheck.xyz')
 # #### 3 ###
-#     filter_gsm('gsm_global.txt')
+    filter_gsm('gsm_global.txt')
 #     setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
 # #### 4 ###
 #     run_gsm()
