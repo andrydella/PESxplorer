@@ -1,16 +1,15 @@
-# Automatic exploration of a general PES from CREST metadynamics output
-# 26/05/24
+# Automatic exploration of a general PES from CREST metadynamics or MSREACT workflow output
+# 09 Sett 24
 # Andrea Della Libera
 
 # IN PROGRESS: #
-# 1. Interface with molgen output
+# 1. Interface automol for the species
+# 2. use automol.find for selpaths
 
 # TO DO: #
-# 1. Crivello di Eratostene in bond_check x scalabilità
-# 2. Eliminare ridondanze calcolo permutazioni
-# 3. Eliminare ridondanze calcolo matrice distanze
-# 4. Formatta meglio logfile
-# 5. Generalize once more CREST output reading as even with new version more iterations are required! 
+# 1. Interface MOLGEN output
+# 2. Fromat better logfile
+# 3. Generalize once more CREST output reading as even with new version more iterations are required! 
 
 # Modules to be imported
 import os
