@@ -14,6 +14,7 @@
 
 # Modules to be imported
 import os
+import sys
 import subprocess
 from itertools import permutations
 import csv
@@ -142,7 +143,7 @@ def is_single_molecule(graph):
 #j. Setup CREST calculation
 # Need to manually create .CHRG and .UHF file if not default (singlet no charge)
 # Numbering as molpro
-def crest_calc(filename, calc_type):
+def crest_calc(filename, calcs,charge,spin):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
     dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
@@ -155,22 +156,33 @@ def crest_calc(filename, calc_type):
     os.system(f"mkdir -p {crest_dir}") 
     write_log(f"\n####\nWorking in {crest_dir}\n####\n")
 
-    if calc_type == 'sp':
-        command = 'crest --for INPUT --prop singlepoint --ewin 10000. --notopo &> crest_ouput.out'
-        command = command.replace('INPUT',f'{filename}')
-        outfile = 'crest_ensemble.xyz'
-    else:
-        print(f'CREST calculation type {calc_type} is not currently defined')
+    os.system(f'cp {filename} {crest_dir}')
+    os.system(f'echo {charge} > {crest_dir}/.CHRG')
+    os.system(f'echo {spin} > {crest_dir}/.UHF')
 
-    crest_check = f'''cp {filename} {crest_dir}
-                cat .CHRG > {crest_dir}/.CHRG
-                cat .UHF > {crest_dir}/.UHF
-                cd {crest_dir}
-                {command}
-                '''
-    p = subprocess.Popen(crest_check, stdout=subprocess.PIPE, shell=True)
-    output, err = p.communicate()
-    p_status = p.wait()
+    for calc_type in calcs:
+        if calc_type == 'opt':
+            command = 'crest INPUT --opt --gnf2'
+            command = command.replace('INPUT',f'{filename}')
+            outfile = 'crestopt.xyz'
+        elif calc_type == 'msreact':
+            command = 'crest INPUT --msreact --msnshifts 4000 --msnshifts2 70 --msmolbar --T 30 –ewin 100. &> msreact.out'
+            command = command.replace('INPUT',f'{filename}')
+            outfile = 'crest_msreact_products.xyz'
+        elif calc_type == 'ensemble':
+            command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo > cregen_out.out --T 30 &> ensemble.out'
+            command = command.replace('INPUT',f'{filename}')
+            outfile = 'crest_ensemble.xyz'
+        else:
+            print(f'CREST calculation type {calc_type} is not currently defined')
+
+        crest_run = f'''cd {crest_dir}
+                    {command}
+                    '''
+        filename = outfile
+        with subprocess.Popen(crest_run, stdout=subprocess.PIPE, shell=True) as p:
+            p.communicate()
+            p.wait()
 
     os.system(f"cp {crest_dir}/{outfile} .") 
 
@@ -521,8 +533,26 @@ def run_gsm():
 
 
 def main():
-    at_num = {'1':'H','6':'C','8':'O','7':'N'}
+    message='''
+Need to provied an argument to the explorer!
+Possible commands are:
+- runcrest -> runs preliminary CREST calculations
+- unite -> reads the output of CREST calculations and collects results in a trajectory text file
+- bond_check -> select unique isomers and eventually bimolecular products
+- selpaths -> create global_gsm.txt
+- filter -> creates filter_gsm.txt
+- setup -> sets up GSM folders for each isomer
+- rungsm -> runs all GSM calcs
+'''
+    commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
+    if len(sys.argv) != 2:
+        print(message)
+        exit()
+    assert sys.argv[1] in commands
+    command = sys.argv[1]
 
+    dirs = os.listdir()
+    assert "input.dat" in dirs, "Missing input data file"
     # Read input information
     with open("input.dat","r") as f:
         lines = [line.strip() for line in f.readlines() if (
@@ -534,26 +564,39 @@ def main():
     crest_version = config['crest_version']
     crest_md_path = config['crest_md_path']
     crest_out_name = config['crest_out_name']
+    charge = config['charge']
+    spin = config['spin']
 
     open('logfile.out','w').close() # Create logfile
     write_log(lines)
 
+    at_num = {'1':'H','6':'C','8':'O','7':'N'}
+
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 
 # #### 1 ###
-    unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-    sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+    if command == 'runcrest':
+        print("here running CREST")
+        crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
+    elif command == 'unite':
+        unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+        sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
 # #### 2 ###
-    # _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-    # _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-    #os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
-    # bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
-    # sel_paths('perm_bondcheck.xyz')
+    elif command == 'bond_check':
+        _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+        #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+        os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
+        bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+    elif command == 'selpaths':
+        sel_paths('perm_bondcheck.xyz')
 # #### 3 ###
-    # filter_gsm('gsm_global.txt')
-#     setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
+    elif command == 'filter':
+        filter_gsm('gsm_global.txt')
+    elif command == 'setup':
+        setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
 # #### 4 ###
-#     run_gsm()
+    elif command == 'rungsm':
+        run_gsm()
 
 if __name__=="__main__":
     main()
