@@ -24,7 +24,7 @@ def group_by_atom_type(atom_lines: List[Tuple[int, str, List[str]]]) -> dict:
         grouped[atom_type].append((idx, atom_type, coordinates))
     return grouped
 
-# Step 3:
+# Step 3: Trying to reduce number of permutations, but I also might miss reactions!
 def prune_groups(upper_triangular,grouped):
     def expand_conn_mat(upper_triangular):
         # Determine the size of the matrix
@@ -68,6 +68,22 @@ def prune_groups(upper_triangular,grouped):
 
     return grouped_copy,removed_count,groups
 
+#Add one permutation of excluded equal atoms
+def add_structures(data):
+    output = defaultdict(list)
+    # Iterate over each key in the data
+    for key, groupss in data.items():
+        # Identify groups with more than one element
+        for i, group in enumerate(groupss):
+            if len(group) > 1:              
+                for j, other_group in enumerate(groupss):
+                    if i != j:  
+                        for elem in sorted(list(group))[1:]:
+                            output[key].append((elem,min(other_group))) 
+    extra_perms = list(itertools.product(*output.values()))
+    return extra_perms
+
+
 # Step 4: Generate permutations for each group of atoms
 def generate_permutations(grouped: dict) -> dict:
     perms = {}
@@ -79,7 +95,10 @@ def generate_permutations(grouped: dict) -> dict:
     return perms
 
 # Step 5: Combine permutations to create all possible configurations
-def combine_permutations(perms: dict, atom_lines: List[Tuple[int, str, List[str]]], added_perms) -> List[List[Tuple[int, str, List[str]]]]:
+def combine_permutations(perms: dict, 
+                         atom_lines: List[Tuple[int, str, List[str]]], 
+                         added_perms=[]
+                         ) -> List[List[Tuple[int, str, List[str]]]]:
     
     combined_permutations = list(itertools.product(*perms.values()))
 
@@ -120,75 +139,25 @@ def format_permutations(permutations: List[List[Tuple[int, str, List[str]]]]) ->
 
 
 # Step 6: Generate all molecule permutations with the given input
-def generate_molecule_permutations(molden_str: list, up_tr: List[List[bool]]) -> List[List[Tuple[int, str, List[str]]]]:
+def generate_molecule_permutations(molden_str: list) -> List[List[Tuple[int, str, List[str]]]]:
+    #also pass connectivity matrix for pruning: up_tr: List[List[bool]]
+
     atom_lines = parse_molden_input(molden_str)
     
     # Group by atom type, retaining the original indices
     grouped = group_by_atom_type(atom_lines)
 
-    grouped,removed_count,groups = prune_groups(up_tr,grouped)
+    # grouped,removed_count,groups = prune_groups(up_tr,grouped)
     
-    extra_perms = add_structures(groups)
+    # extra_perms = add_structures(groups)
 
     # Generate permutations for the indices within each group
     perms = generate_permutations(grouped)
     
     # Combine these permutations to create all possible configurations
-    all_permutations = combine_permutations(perms, atom_lines,extra_perms)
+    all_permutations = combine_permutations(perms, atom_lines) #extra_perms defaults to []
     
     return format_permutations(all_permutations)
-
-
-#Add one permutation of excluded equal atoms
-def add_structures(data):
-    output = defaultdict(list)
-    # Iterate over each key in the data
-    for key, groupss in data.items():
-        # Identify groups with more than one element
-        for i, group in enumerate(groupss):
-            if len(group) > 1:              
-                for j, other_group in enumerate(groupss):
-                    if i != j:  
-                        for elem in sorted(list(group))[1:]:
-                            output[key].append((elem,min(other_group))) 
-    extra_perms = list(itertools.product(*output.values()))
-    return extra_perms
-
-# def add_structures(data):
-#     output = []
-#     # Iterate over each key in the data
-#     for key, groupss in data.items():
-#         # Identify groups with more than one element
-#         for i, group in enumerate(groupss):
-#             if len(group) > 1:
-#                 first_element = min(group)
-                
-#                 # Iterate over the rest of the groups to create substitutions
-#                 for j, other_group in enumerate(groupss):
-#                     if i != j:  # Avoid substituting within the same group
-#                         for elem in sorted(list(group))[1:]:  # Skip the first element
-#                             new_data = deepcopy(data)
-#                             # Substitute the element with the first element of the other group
-#                             new_data[key][i].remove(elem)
-#                             new_data[key][i].add(min(other_group))
-#                             new_data[key][j].remove(min(other_group))
-#                             new_data[key][j].add(elem)
-#                             output.append(new_data) 
-#     more_perms=defaultdict(list)
-#     for variation in output:
-#         for atom_type,group in variation.items():
-#             new_permut = []
-#             for subset in group:
-#                 new_permut.extend(sorted(list(subset)))
-#             more_perms[atom_type].append(new_permut)
-
-#     added_perms = []
-#     # Soluzione corrente è comoda per C4H10 perché i primi 4 atomi sono C e poi ho gli H. Se
-#     # gli indici sono mischiati la ricostruzione non è cosi semplice e va ripensata
-#     for i in range(len(output)):
-#         pass
-#     return more_perms
-
 
 
 

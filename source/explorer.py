@@ -357,7 +357,7 @@ def bond_check3(filinp):
         write_log(f'Working on isomer {k}\n')
         prefix = [el for el in isomer[:2]]
         # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:],conn_mat[k])
+        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:]) #,conn_mat[k]
         write_log(f'Number of permutations {len(isom_k_permuts)}\n')
 
         for h,permutation in enumerate(isom_k_permuts):
@@ -376,7 +376,7 @@ def bond_check3(filinp):
                     with open('perm_equalpairs.txt','a') as f:
                         f.write(f'\nPermutation {h} - Eq_pair: {k} {j}')
                     write_log(f'\nPermutation {h} - Eq_pair: {k} {j}')
-                # Add +1 for correspondence with molden which starts from 1
+                # Mentally add +1 for correspondence with molden which starts from 1
 
             #if list(equal_pairs) is not []: write_log(['%s %s\n' % x for x in equal_pairs])
             # Get rid of doubles (use set to include only uniques)
@@ -414,7 +414,7 @@ def sel_paths(filinp):
         write_log(f'Working on isomer {k}\n')
         prefix = [el for el in isomer[:2]]
         # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:],conn_mat[k])
+        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:]) #,conn_mat[k]
         write_log(f'Number of permutations {len(isom_k_permuts)}\n')
 
         for h,permutation in enumerate(isom_k_permuts):
@@ -544,15 +544,13 @@ def main():
     unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
     sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
 # #### 2 ###
-    _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-    write_log("connect")
-    write_log(connect)
-    _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-    os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
-    bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
-    sel_paths('perm_bondcheck.xyz')
+    # _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+    # _,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+    #os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
+    # bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+    # sel_paths('perm_bondcheck.xyz')
 # #### 3 ###
-    filter_gsm('gsm_global.txt')
+    # filter_gsm('gsm_global.txt')
 #     setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
 # #### 4 ###
 #     run_gsm()
