@@ -11,141 +11,15 @@
 # 2. Fromat better logfile
 # 3. Generalize once more CREST output reading as even with new version more iterations are required! 
 
-# Modules to be imported
+# Modules import
 import os
 import sys
 import subprocess
-from itertools import permutations
 import csv
-import math as m
+from copy import deepcopy
 import generalized_permutations as gen_perm
-
-# Auxilliary functions (| in the comments means 'or')
-# a. write xyz from list in the form [natom,energy|empty,coords1,...,coordsn]
-def write_xyz(xyz_list,filname):
-    with open(filname,'w') as f:
-        for line in xyz_list:
-            f.write(line+'\n')
-
-# a.1 append xyz from list in the form [natom,energy|empty,coords1,...,coordsn]
-def append_xyz(xyz_list,filname):
-    with open(filname,'a') as f:
-        for line in xyz_list:
-            f.write(line+'\n')
-
-# b. Write log file
-def write_log(stuff_to_write):
-    with open('logfile.out','a') as f:
-        if type(stuff_to_write) == type('str'): f.write(stuff_to_write+'\n')
-        elif type(stuff_to_write) == type(1): f.write(str(stuff_to_write)+'\n')
-        else: f.writelines(stuff_to_write) # For lists
-
-# c. Write all xyz in isomers into file
-def write_xyzlist(xyz_list,filname):
-    with open(filname,'w') as f:
-        for isomer in xyz_list:
-            for line in isomer: f.write(line+'\n')
-
-# d. create isomers list from xyz list file
-def read_xyzlist(filname,n_atoms):
-    isomers = []
-    with open(filname,'r') as fil:
-        lines = [line.strip() for line in fil.readlines()]
-    for i,line in enumerate(lines):
-        try:
-            n_atoms = int(line)
-            isomers.append([li for li in lines[i:i+n_atoms+2]])
-        except: pass
-    return isomers
-
-# e. list permutations
-def list_permutations(input_list, indexes):
-    perm_isom = []
-    sublist = [input_list[i] for i in indexes]
-    permlist = list(permutations(sublist))
-    for perm in permlist:
-        cp_input_list = [el for el in input_list]
-        j = 0
-        for i in range(len(cp_input_list)):
-            if i in indexes: 
-                cp_input_list[i] = perm[j]
-                j += 1
-        perm_isom.append(cp_input_list)
-    return perm_isom
-
-#f. compute distance, dist_mat e conn_mat
-def conn_dist(isomers):
-    dist_mat = []
-    conn_mat = []
-    coords_mat = []
-    for isomer in isomers:
-    # Create distance matrix and connectivity matrix (1|0 -> ye|no)
-    # Both matrices are lists of lists of floats or booleans
-    # [0] isomer i (list) 
-    # [1] atom n of isomer i (list)
-    # [2] distance atom x and n with x>n (float|bool)
-        dist_line = []
-        conn_line = []
-        atoms = []
-        coords = []
-        for line in isomer[2:]:
-            splitted = line.split()
-            atoms.append(splitted[0])
-            coords.append([float(x) for x in splitted[1:]])
-        for i,line in enumerate(coords):
-            distance = []
-            for j in range(i+1,len(coords)):
-                distance.append(((line[0]-coords[j][0])**2+(line[1]-coords[j][1])**2+(line[2]-coords[j][2])**2)**0.5)
-            dist_line.append(distance)
-            #print(distance)
-    # Use largest caovalent radius (CC bond=0.75) *2 * 1.15 for safety
-            conn_line.append(list(map(lambda x: x<1.5*1.15, distance)))
-            #print(conn_line[-1])
-        dist_mat.append(dist_line)
-        conn_mat.append(conn_line)
-        coords_mat.append(coords)
-    return dist_mat,conn_mat,coords_mat
-
-#g. filter GSM global list:
-def filter_gsm(filname):
-    with open(filname,'r') as f:
-        matrix = [list(map(int, line.strip()[1:-1].split(', '))) for line in f.readlines()]
-
-    seen_first_two = set()  # To keep track of the first two elements
-    filtered_matrix = []  # To store the filtered list of lists
-
-    for inner_list in matrix:
-        first_two = tuple(inner_list[:2])
-        if first_two not in seen_first_two:
-            seen_first_two.add(first_two)
-            filtered_matrix.append(inner_list)
-
-    # Print the filtered matrix
-    with open('gsm_filter.txt','w') as f:
-        wr = csv.writer(f)
-        wr.writerows(filtered_matrix)
-
-#h. DFS algorithm
-def dfs(graph, start, visited):
-    visited.add(start)
-    for neighbor in graph[start]:
-        if neighbor not in visited:
-            dfs(graph, neighbor, visited)
-
-#i. Is single molecule?
-def is_single_molecule(graph):
-    visited = set()
-    start_vertex = next(iter(graph.keys()))  # Start DFS from an arbitrary vertex
-    dfs(graph, start_vertex, visited)
-    return len(visited) == len(graph)
-
-#j. Interface with automol
-def amech_data_structure(filinp):
-    import automol
-    with open(filinp,'r') as f:
-        trajec_string = f.read()
-    geos = [ geoi for geoi,_ in automol.geom.from_xyz_trajectory_string(trajec_string)]
-
+from auxiliary_funcs import *
+from old_bondcheck import *
 
 #############################
 
@@ -174,11 +48,11 @@ def crest_calc(filename,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crestopt.xyz'
         elif calc_type == 'msreact':
-            command = 'crest INPUT --msreact --msnshifts 1000 --msnshifts2 20 --msmolbar --T 30 –ewin 100. &> msreact.out'
+            command = 'crest INPUT --msreact --msnshifts 800 --msnshifts2 15 --msmolbar --T 30 –ewin 100. &> msreact.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'isomers.xyz'
         elif calc_type == 'ensemble':
-            command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo > cregen_out.out --T 30 &> ensemble.out'
+            command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo --T 30 &> ensemble.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         elif calc_type == 'sp':
@@ -250,7 +124,7 @@ def unite_xyz(md_path,md_name):
         lines = [line.strip() for line in f.readlines()]
     n_atoms = int(lines[0])
     # Write logfile here
-    write_log("Crest output was found in {md_path}{md_name}\n")
+    write_log(f"Crest output was found in {md_path}{md_name}\n")
     write_log(f'n atoms: {n_atoms}')
     with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
@@ -304,118 +178,36 @@ def sort_xyz(filinp,charge,spin):
         isomers.sort(key=lambda x:float(x[1].split()[0]))
     write_xyzlist(isomers,'allcrestprods_sort.xyz')
 
-# 3. Select unique isomers using distance matrix
-def bond_check(filinp,at_num):
-    equal_pairs = set()
-    isomers = []
-    with open('natoms_unite.txt','r') as f:
-        n_atoms = int(f.read())
-    isomers = read_xyzlist(filinp,n_atoms)
-
-    ##CONN MAT QUI
-    dist_mat,conn_mat,coords_mat = conn_dist(isomers)
-
-    # Define equal pairs based on conn_mat 
-    for i,el in enumerate(conn_mat):
-        for j in range(i+1,len(conn_mat)):
-            is_same = [ x for x in map(lambda x,y: x==y, el,conn_mat[j]) if x==0]
-            if not is_same: equal_pairs.add((i,j))
-            # Mentally add +1 for correspondence with molden which starts from 1
-
-    if list(equal_pairs) is not []: write_log(['%s %s\n' % x for x in equal_pairs])
-    # Get rid of doubles (use set to include only uniques)
-    to_be_removed = list(set([x for x in map(lambda x: x[1],equal_pairs)]))
-    # Should already be good but let's sort it to make sure
-    to_be_removed.sort(key=lambda x: x,reverse=1)
-    write_log(['%s ' % x for x in to_be_removed])
-
-    for el in to_be_removed: isomers.pop(el)
-    write_xyzlist(isomers,'unique_bondcheck.xyz')
-    with open('numisoms.txt','w') as f:
-        f.write(str(len(isomers))+'\n')
-
-    return dist_mat,conn_mat,coords_mat
-
-# 3.5 Remove unique isomers that are actually fragments exploiting DFS algorithm
-def remove_frags(filinp):
-    write_log("\nEntering remove_frags function..\n")
-    with open('natoms_unite.txt','r') as f:
-        n_atoms = int(f.read())
-    isomers = read_xyzlist(filinp,n_atoms)
-    dist_mat,conn_mat,coords_mat = conn_dist(isomers)
-    to_be_removed=[]
-
-    for i in range(len(conn_mat)):
-        graph = {num:[] for num in range(n_atoms)}
-        for counter,item in enumerate(conn_mat[i]):
-            for ccounter,it in enumerate(item): 
-                if it: 
-                    graph[counter].append(counter+ccounter+1)
-                    graph[counter+ccounter+1].append(counter)
-
-        result = is_single_molecule(graph)
-        if not result: to_be_removed.append(i)
-        write_log(f"The given structure {i} is a single molecule: {result}\n")
-
-    to_be_removed.sort(key=lambda x: x,reverse=1)
-    print(f"{to_be_removed} - {len(isomers)}")
-    for el in to_be_removed: isomers.pop(el)
-    write_xyzlist(isomers,'nofrags_bondcheck.xyz')
-    dist_mat,conn_mat,coords_mat = conn_dist(isomers)
-    return dist_mat,conn_mat,coords_mat
 
 
-# 4.V2 Select unique isomers using distance matrix AND permutations - GENERALIZED
-def bond_check3(filinp):
-    open('perm_equalpairs.txt','w').close()
-    equal_pairs = set()
-    with open('natoms_unite.txt','r') as f:
-        n_atoms = int(f.read())
-    isomers = read_xyzlist(filinp,n_atoms)
-    _,conn_mat,_ = conn_dist(isomers)
+# 3. Use find.py to get possible reactions
+def find_reactions(filinp):
+    import automol
 
-    write_log('\nEntering permutations loop..:\n')
-    for k,isomer in enumerate(isomers):
-        write_log(f'Working on isomer {k}\n')
-        prefix = [el for el in isomer[:2]]
-        # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:]) #,conn_mat[k]
-        write_log(f'Number of permutations {len(isom_k_permuts)}\n')
+    geos,well_dct,reac_dct = amech_data_structure(filinp)
 
-        for h,permutation in enumerate(isom_k_permuts):
-            # Define useful variables
-            isomers_copy = [el for el in isomers]
-            isomers_copy[k] = prefix + permutation
+    for reaction,stuff in reac_dct.items():
+        reac_prod = [spc.strip() for spc in reaction.split("=")]
+        reac_prod_idxs = [spc.split("_")[1] for spc in reac_prod]
+        reac_idx = int(reac_prod_idxs[0])
+        print(reac_idx)
+        prod_idx = int(reac_prod_idxs[1])
+        atom_order = stuff[0]
+        b_formed = stuff[1]
+        b_broken = stuff[2]
+        print(reac_prod,b_formed,b_broken)
+        geo_r = deepcopy(geos[reac_idx])
+        geo_p = deepcopy(geos[prod_idx])
 
-            ##CONN MAT QUI
-            _,conn_mat_copy,_ = conn_dist(isomers_copy)
+        visited_ats = set()
+        for at1,at2 in atom_order.items():
+            if at1 not in visited_ats:
+                if at1 != at2:
+                    print(f"Swapping ats {at1} {at2}")
+                    automol.geom.swap_coordinates(geo_p, at1, at2)
+                visited_ats.update([at1,at2])
 
-            # Define equal pairs based on conn_mat
-            for j in range(k+1,len(conn_mat_copy)):
-                is_same = [ x for x in map(lambda x,y: x==y, conn_mat_copy[k],conn_mat_copy[j]) if x==0]
-                if not is_same: 
-                    equal_pairs.add((k,j))
-                    with open('perm_equalpairs.txt','a') as f:
-                        f.write(f'\nPermutation {h} - Eq_pair: {k} {j}')
-                    write_log(f'\nPermutation {h} - Eq_pair: {k} {j}')
-                # Mentally add +1 for correspondence with molden which starts from 1
 
-            #if list(equal_pairs) is not []: write_log(['%s %s\n' % x for x in equal_pairs])
-            # Get rid of doubles (use set to include only uniques)
-            to_be_removed = list(set([x for x in map(lambda x: x[1],equal_pairs)]))
-            # Should already be good but let's sort it to make sure
-            to_be_removed.sort(key=lambda x: x,reverse=1)
-            #print(to_be_removed)
-
-    write_log('Elements to be removed:\n')
-    write_log(['%s ' % x for x in to_be_removed])
-    for el in to_be_removed: 
-        isomers.pop(el)
-        write_log(f'\nIsomer {el} was successfully removed\n')
-    write_log(f"\nCurrent number of isomers: {len(isomers)}\n")
-    write_xyzlist(isomers,'perm_bondcheck.xyz')
-    with open('numisoms.txt','w') as f:
-        f.write(str(len(isomers))+'\n')
 
 # 5. Select paths with permutations
 def sel_paths(filinp):
@@ -592,7 +384,7 @@ Possible commands are:
         sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # #### 2 ###
     elif command == 'bond_check':
-        amech_data_structure('allcrestprods_unite.xyz')
+        find_reactions('allcrestprods_sort.xyz')
         # _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
         # #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
         # os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
