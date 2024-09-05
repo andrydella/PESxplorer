@@ -139,9 +139,18 @@ def is_single_molecule(graph):
     dfs(graph, start_vertex, visited)
     return len(visited) == len(graph)
 
-#j. Setup CREST calculation
-# Need to manually create .CHRG and .UHF file if not default (singlet no charge)
-# Numbering as molpro
+#j. Interface with automol
+def amech_data_structure(filinp):
+    import automol
+    with open(filinp,'r') as f:
+        trajec_string = f.read()
+    geos = [ geoi for geoi,_ in automol.geom.from_xyz_trajectory_string(trajec_string)]
+
+
+#############################
+
+# Functions
+#0. Setup CREST calculation
 def crest_calc(filename, calcs,charge,spin):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
@@ -165,11 +174,15 @@ def crest_calc(filename, calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crestopt.xyz'
         elif calc_type == 'msreact':
-            command = 'crest INPUT --msreact --msnshifts 4000 --msnshifts2 70 --msmolbar --T 30 –ewin 100. &> msreact.out'
+            command = 'crest INPUT --msreact --msnshifts 1000 --msnshifts2 20 --msmolbar --T 30 –ewin 100. &> msreact.out'
             command = command.replace('INPUT',f'{filename}')
-            outfile = 'crest_msreact_products.xyz'
+            outfile = 'isomers.xyz'
         elif calc_type == 'ensemble':
             command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo > cregen_out.out --T 30 &> ensemble.out'
+            command = command.replace('INPUT',f'{filename}')
+            outfile = 'crest_ensemble.xyz'
+        elif calc_type == 'sp':
+            command = 'crest --for INPUT --prop singlepoint --ewin 10000. --notopo &> energy.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         else:
@@ -179,17 +192,16 @@ def crest_calc(filename, calcs,charge,spin):
                     {command}
                     '''
         filename = outfile
+        write_log(f"Command is: {command}\nOutput is: {outfile}\n")
         with subprocess.Popen(crest_run, stdout=subprocess.PIPE, shell=True) as p:
             p.communicate()
             p.wait()
 
     os.system(f"cp {crest_dir}/{outfile} .") 
+    if 'sp' not in calcs:
+        os.system(f"cat {crest_dir}/crestopt.xyz >> {outfile}") 
 
     return
-
-#############################
-
-# Functions
 
 # 1.b Get structures from MOLGEN output and also consider bimolecular products
 # TODO, test needed, I believe there is still something wrong
@@ -233,7 +245,7 @@ def unite_xyz(md_path,md_name,crest_vers):
     filename = 'crest_products.xyz' # Output file CREST MD
 
     if float(crest_vers) >=3.0:
-        os.system(f"cp {md_path}/{md_name} ./allcrestprods_unite.xyz")
+        os.system(f"cp crest_ensemble.xyz allcrestprods_unite.xyz")
         with open("allcrestprods_unite.xyz",'r') as f:
             lines = [line.strip() for line in f.readlines()]
         n_atoms = int(lines[0])
@@ -241,54 +253,54 @@ def unite_xyz(md_path,md_name,crest_vers):
         write_log("Crest version 3.0 was used..\n")
         write_log(f'n atoms: {n_atoms}')
         with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
-        return
 
-    if 'allcrestprods_unite.xyz' not in os.listdir():
-    #if already run, don't recreate allprods (it takes a while...)
-        md_list = [fold+'/' for fold in os.listdir(md_path) if md_name in fold]
+    else:
+        if 'allcrestprods_unite.xyz' not in os.listdir():
+        #if already run, don't recreate allprods (it takes a while...)
+            md_list = [fold+'/' for fold in os.listdir(md_path) if md_name in fold]
 
-        with open(md_path+md_list[0]+filename,'r') as f:
-            lines = [line.strip() for line in f.readlines()]
-        n_atoms = int(lines[0])
-        # Write logfile here
-        write_log(md_path+md_list[0]+filename)
-        write_log(f'n atoms: {n_atoms}')
-        with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
+            with open(md_path+md_list[0]+filename,'r') as f:
+                lines = [line.strip() for line in f.readlines()]
+            n_atoms = int(lines[0])
+            # Write logfile here
+            write_log(md_path+md_list[0]+filename)
+            write_log(f'n atoms: {n_atoms}')
+            with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
-        for metadyn in md_list:
-            write_log('Working on: '+metadyn)
-            if filename not in os.listdir(md_path+metadyn): 
-                write_log('Skipping, not found crest_products.xyz')
-                continue
-            else:
-                with open(md_path+metadyn+filename,'r') as f:
-                    lines = [line.strip() for line in f.readlines()]
-                for i,line in enumerate(lines):
-                    try:
-                        n_at = int(line)
-                        if n_at == n_atoms:
-                            isomers.append([li for li in lines[i:i+n_atoms+2]])
-                            n_isom += 1
-                            write_log('New isomer! n isom '+str(n_isom))
-                        else:
+            for metadyn in md_list:
+                write_log('Working on: '+metadyn)
+                if filename not in os.listdir(md_path+metadyn): 
+                    write_log('Skipping, not found crest_products.xyz')
+                    continue
+                else:
+                    with open(md_path+metadyn+filename,'r') as f:
+                        lines = [line.strip() for line in f.readlines()]
+                    for i,line in enumerate(lines):
+                        try:
+                            n_at = int(line)
+                            if n_at == n_atoms:
+                                isomers.append([li for li in lines[i:i+n_atoms+2]])
+                                n_isom += 1
+                                write_log('New isomer! n isom '+str(n_isom))
+                            else:
+                                pass
+                        except:
                             pass
-                    except:
-                        pass
-        write_xyzlist(isomers,'allcrestprods_unite.xyz')
-        # No energy selection this time
+            write_xyzlist(isomers,'allcrestprods_unite.xyz')
+            # No energy selection this time
 
 # 2. Reorder isomers based on energy
-def sort_xyz(filinp):
+def sort_xyz(filinp,charge,spin):
     isomers = []
     with open('natoms_unite.txt','r') as f:
         n_atoms = int(f.read())
     isomers = read_xyzlist(filinp,n_atoms)
     # Sort by energy
-    if isomers[0][1] != '':
+    try:
         isomers.sort(key=lambda x:float(x[1].split()[0]))
-    else:
-        crest_calc(filinp,'sp')
-        os.system(f'mv crest_ensemble.xyz {filinp}_sp')
+    except:
+        crest_calc(filinp,['sp'],charge,spin)
+        os.system(f'cp crest_ensemble.xyz {filinp}_sp')
         isomers = read_xyzlist(f'{filinp}_sp',n_atoms)
         isomers.sort(key=lambda x:float(x[1].split()[0]))
     write_xyzlist(isomers,'allcrestprods_sort.xyz')
@@ -575,17 +587,17 @@ Possible commands are:
 
 # #### 1 ###
     if command == 'runcrest':
-        print("here running CREST")
         crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
     elif command == 'unite':
         unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
-        sort_xyz('allcrestprods_unite.xyz') # -> allcrestprods_sort.xyz
+        sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # #### 2 ###
     elif command == 'bond_check':
-        _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-        #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-        os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
-        bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+        amech_data_structure('allcrestprods_unite.xyz')
+        # _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+        # #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+        # os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
+        # bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
     elif command == 'selpaths':
         sel_paths('perm_bondcheck.xyz')
 # #### 3 ###
