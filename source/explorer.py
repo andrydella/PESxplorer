@@ -151,7 +151,7 @@ def amech_data_structure(filinp):
 
 # Functions
 #0. Setup CREST calculation
-def crest_calc(filename, calcs,charge,spin):
+def crest_calc(filename,calcs,charge,spin):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
     dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
@@ -239,55 +239,54 @@ def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):
 
 # 1. Unite metadynamics results in one single text file and create list of isomers
 #    Names of md folders should all have the same root name
-def unite_xyz(md_path,md_name,crest_vers):
-    isomers = []
-    n_isom = 0
-    filename = 'crest_products.xyz' # Output file CREST MD
+def unite_xyz(md_path,md_name):
+    # isomers = []
+    # n_isom = 0
+    # filename = 'crest_products.xyz' # Output file CREST MD
 
-    if float(crest_vers) >=3.0:
-        os.system(f"cp crest_ensemble.xyz allcrestprods_unite.xyz")
-        with open("allcrestprods_unite.xyz",'r') as f:
-            lines = [line.strip() for line in f.readlines()]
-        n_atoms = int(lines[0])
-        # Write logfile here
-        write_log("Crest version 3.0 was used..\n")
-        write_log(f'n atoms: {n_atoms}')
-        with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
+    # if float(crest_vers) >=3.0:
+    os.system(f"cp crest_ensemble.xyz allcrestprods_unite.xyz")
+    with open("allcrestprods_unite.xyz",'r') as f:
+        lines = [line.strip() for line in f.readlines()]
+    n_atoms = int(lines[0])
+    # Write logfile here
+    write_log("Crest output was found in {md_path}{md_name}\n")
+    write_log(f'n atoms: {n_atoms}')
+    with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
-    else:
-        if 'allcrestprods_unite.xyz' not in os.listdir():
-        #if already run, don't recreate allprods (it takes a while...)
-            md_list = [fold+'/' for fold in os.listdir(md_path) if md_name in fold]
+    # else:
+    #     if 'allcrestprods_unite.xyz' not in os.listdir():
+    #     #if already run, don't recreate allprods (it takes a while...)
+    #         md_list = [fold+'/' for fold in os.listdir(md_path) if md_name in fold]
 
-            with open(md_path+md_list[0]+filename,'r') as f:
-                lines = [line.strip() for line in f.readlines()]
-            n_atoms = int(lines[0])
-            # Write logfile here
-            write_log(md_path+md_list[0]+filename)
-            write_log(f'n atoms: {n_atoms}')
-            with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
+    #         with open(md_path+md_list[0]+filename,'r') as f:
+    #             lines = [line.strip() for line in f.readlines()]
+    #         n_atoms = int(lines[0])
+    #         # Write logfile here
+    #         write_log(md_path+md_list[0]+filename)
+    #         write_log(f'n atoms: {n_atoms}')
+    #         with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
-            for metadyn in md_list:
-                write_log('Working on: '+metadyn)
-                if filename not in os.listdir(md_path+metadyn): 
-                    write_log('Skipping, not found crest_products.xyz')
-                    continue
-                else:
-                    with open(md_path+metadyn+filename,'r') as f:
-                        lines = [line.strip() for line in f.readlines()]
-                    for i,line in enumerate(lines):
-                        try:
-                            n_at = int(line)
-                            if n_at == n_atoms:
-                                isomers.append([li for li in lines[i:i+n_atoms+2]])
-                                n_isom += 1
-                                write_log('New isomer! n isom '+str(n_isom))
-                            else:
-                                pass
-                        except:
-                            pass
-            write_xyzlist(isomers,'allcrestprods_unite.xyz')
-            # No energy selection this time
+    #         for metadyn in md_list:
+    #             write_log('Working on: '+metadyn)
+    #             if filename not in os.listdir(md_path+metadyn): 
+    #                 write_log('Skipping, not found crest_products.xyz')
+    #                 continue
+    #             else:
+    #                 with open(md_path+metadyn+filename,'r') as f:
+    #                     lines = [line.strip() for line in f.readlines()]
+    #                 for i,line in enumerate(lines):
+    #                     try:
+    #                         n_at = int(line)
+    #                         if n_at == n_atoms:
+    #                             isomers.append([li for li in lines[i:i+n_atoms+2]])
+    #                             n_isom += 1
+    #                             write_log('New isomer! n isom '+str(n_isom))
+    #                         else:
+    #                             pass
+    #                     except:
+    #                         pass
+    #         write_xyzlist(isomers,'allcrestprods_unite.xyz')
 
 # 2. Reorder isomers based on energy
 def sort_xyz(filinp,charge,spin):
@@ -572,7 +571,7 @@ Possible commands are:
     config = {l.split('=')[0].strip():l.split('=')[1].strip() for l in lines}
     
     model_gsm = config['model_gsm']
-    crest_version = config['crest_version']
+    # crest_version = config['crest_version']
     crest_md_path = config['crest_md_path']
     crest_out_name = config['crest_out_name']
     charge = config['charge']
@@ -589,7 +588,7 @@ Possible commands are:
     if command == 'runcrest':
         crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
     elif command == 'unite':
-        unite_xyz(crest_md_path,crest_out_name,crest_version) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+        unite_xyz(crest_md_path,crest_out_name) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
         sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # #### 2 ###
     elif command == 'bond_check':
