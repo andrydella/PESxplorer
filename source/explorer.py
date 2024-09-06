@@ -15,7 +15,7 @@
 import os
 import sys
 import subprocess
-import csv
+#import csv
 from copy import deepcopy
 from auxiliary_funcs import *
 from old_bondcheck import *
@@ -191,6 +191,7 @@ def setup_gsm(filinp,model_gsm):
     os.system('mkdir -p GSM_FOLDS')
     gsm_counters = {spc:0 for spc,_ in well_dct.items()}
 
+    open("reacions.csv","w").close()
     for reaction,stuff in reac_dct.items():
         reac_prod = [spc.strip() for spc in reaction.split("=")]
         reac_prod_idxs = [spc.split("_")[1] for spc in reac_prod]
@@ -230,6 +231,10 @@ def setup_gsm(filinp,model_gsm):
             f.write("\nBREAK\n")
             for a,b in iter(b_broken):
                 f.write(f"{a} {b}\n")
+        
+        # Write csv file that collect info on reacions found
+        with open("reacions.csv","a") as f:
+            f.write(f"{reac_prod[0]}, {reac_prod[1]}, {fold_name}, {gsm_num}\n")
 
 # 5. run_gsm()
 def run_gsm(is_ssm):
@@ -255,8 +260,8 @@ def run_gsm(is_ssm):
                 gsm_num = str(i+1).zfill(4)
                 print(f'gsm.orca {gsm_num} in {fold}')
                 if f"tsq{gsm_num}.xyz" not in os.listdir(f'scratch/'):
-                    print("ts file not found, runnin GSM now")
-                    command = f"./gsm.orca 1 30 &> out{gsm_num}.log"
+                    print("ts file not found, runnin GSM or SSM now")
+                    command = f"./gsm.orca {i+1} 30 &> out{gsm_num}.log"
                     with subprocess.Popen(command, 
                                           stdout=subprocess.PIPE, shell=True) as p:
                         p.communicate()  
@@ -267,8 +272,6 @@ def run_gsm(is_ssm):
         else: 
             print(f'{fold} empty folder')
 
-def run_ssm():
-    pass
 ##################################
 
 
