@@ -1,5 +1,6 @@
 from auxiliary_funcs import *
 import generalized_permutations as gen_perm
+import os
 
 # 3. Select unique isomers using distance matrix
 def bond_check(filinp,at_num):
@@ -113,3 +114,150 @@ def bond_check3(filinp):
     write_xyzlist(isomers,'perm_bondcheck.xyz')
     with open('numisoms.txt','w') as f:
         f.write(str(len(isomers))+'\n')
+
+# 5. Select paths with permutations
+def sel_paths(filinp):
+    # Creates folder to store permutations of isomers
+    if 'perm_folder' not in os.listdir(): os.mkdir('perm_folder')
+
+    # Contains [isom K - isom I - permutC Z - permutH H]
+    gsm_list = []
+    gsm_included = set()
+    open('selectedpaths.txt','w').close()
+    with open('natoms_unite.txt','r') as f:
+        n_atoms = int(f.read())
+    isomers = read_xyzlist(filinp,n_atoms)
+    _,conn_mat,_ = conn_dist(isomers)
+
+    write_log('\nEntering permutations loop..:\n')
+    for k,isomer in enumerate(isomers):
+        write_log(f'Working on isomer {k}\n')
+        prefix = [el for el in isomer[:2]]
+        # Crea permutations of isomer K
+        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:]) #,conn_mat[k]
+        write_log(f'Number of permutations {len(isom_k_permuts)}\n')
+
+        for h,permutation in enumerate(isom_k_permuts):
+            # Define useful variables
+            isomers_copy = [el for el in isomers]
+            isomers_copy[k] = prefix + permutation
+
+            ##CONN MAT QUI
+            _,conn_mat_copy,_ = conn_dist(isomers_copy)
+
+            # Define number of broken / added bonds
+            # "leaf from tree in forest for leaf in tree"
+            k_bonds = [item for sublist in conn_mat_copy[k] for item in sublist]
+            for i in range(k+1,len(conn_mat_copy)):
+                curr_bonds = [item for sublist in conn_mat_copy[i] for item in sublist]
+                is_same = [ x for x in map(lambda x,y: x==y, k_bonds,curr_bonds)]
+                #print(i+k,is_same.count(False))
+                if is_same.count(False)<5: # Up to break2form2
+                    gsm_list.append([k, i, h])
+                    gsm_included.add(k)
+                    gsm_included.add(i)
+
+        # Writes permutations in file for isomer k
+        write_log(f"Writing permutations of isomer {k} in perm_folder/permutations_{k}.xyz..\n")
+        write_xyzlist([prefix+iso for iso in isom_k_permuts],f'perm_folder/permutations_{k}.xyz')
+
+    with open(f'gsm_global.txt','w') as g:
+        for lst in gsm_list: g.write(f'{lst}\n')
+
+    write_log(str(list(gsm_included)))
+
+# 6. setup_gsm from gsm_filter file and perm_bondcheck list of isomers
+# NON TIENE LO STESSO ORDINE DELLE PERMUTAZIONI - salvo gli xyz in bond_check3
+def setup_gsm(gsminp,isomlist,model_gsm):
+
+    # Get isomers list and n atoms
+    with open('natoms_unite.txt','r') as f:
+        n_atoms = int(f.read())
+    isomers = read_xyzlist(isomlist,n_atoms)
+
+    # Get reaction list from gsm_filter.xyz
+    with open(gsminp,'r') as f:
+         reaction_list = list(csv.reader(f, delimiter=","))
+
+    # create gsm folders
+    os.system('mkdir -p GSM_FOLDS')
+    for k,isomer in enumerate(isomers):
+        # Setup GSM folder
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
+        if not os.path.exists(fold_name): os.mkdir(fold_name)
+        if not os.path.exists(f'{fold_name}/scratch'): os.mkdir(f'{fold_name}/scratch')
+        gsm_path = os.getcwd()+f'/{fold_name}/'
+
+    for k,isomer in enumerate(isomers):
+        isom_k_perm = read_xyzlist(f'perm_folder/permutations_{k}.xyz',n_atoms)
+        isomers_copy = [el for el in isomers] # Duplicate list for modfying it
+        # Get GSM folder name and path
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
+        gsm_path = os.getcwd()+f'/{fold_name}/'
+
+        # Get list of reactions to study
+        reaction_list_k = [el for el in reaction_list if el[0]==f'{k}']
+
+        # Skip folder if reaction list empty
+        if reaction_list_k == []: continue
+        else: pass
+
+        # Copy model data folder
+        os.system(f'cp -r {model_gsm} {gsm_path}')
+
+        # Write initial file for each gsm calculation
+        for i,ind in enumerate(reaction_list_k):
+            gsm_count = str(i+1).zfill(4)
+            isom_k_num = int(ind[2])
+            isom_k_perm[isom_k_num][1] = f'isom num {i} ' + isom_k_perm[isom_k_num][1]
+            write_xyz(isom_k_perm[isom_k_num],f'{gsm_path}scratch/initial{gsm_count}.xyz')
+            isomers_copy[int(ind[1])][1] = f'from perm {isom_k_num} of prev isomer ' + isomers_copy[int(ind[1])][1]
+            append_xyz(isomers_copy[int(ind[1])],f'{gsm_path}scratch/initial{gsm_count}.xyz')
+    
+# 6. setup_gsm from gsm_filter file and perm_bondcheck list of isomers
+# NON TIENE LO STESSO ORDINE DELLE PERMUTAZIONI - salvo gli xyz in bond_check3
+def setup_gsm(gsminp,isomlist,model_gsm):
+
+    # Get isomers list and n atoms
+    with open('natoms_unite.txt','r') as f:
+        n_atoms = int(f.read())
+    isomers = read_xyzlist(isomlist,n_atoms)
+
+    # Get reaction list from gsm_filter.xyz
+    with open(gsminp,'r') as f:
+         reaction_list = list(csv.reader(f, delimiter=","))
+
+    # create gsm folders
+    os.system('mkdir -p GSM_FOLDS')
+    for k,isomer in enumerate(isomers):
+        # Setup GSM folder
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
+        if not os.path.exists(fold_name): os.mkdir(fold_name)
+        if not os.path.exists(f'{fold_name}/scratch'): os.mkdir(f'{fold_name}/scratch')
+        gsm_path = os.getcwd()+f'/{fold_name}/'
+
+    for k,isomer in enumerate(isomers):
+        isom_k_perm = read_xyzlist(f'perm_folder/permutations_{k}.xyz',n_atoms)
+        isomers_copy = [el for el in isomers] # Duplicate list for modfying it
+        # Get GSM folder name and path
+        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
+        gsm_path = os.getcwd()+f'/{fold_name}/'
+
+        # Get list of reactions to study
+        reaction_list_k = [el for el in reaction_list if el[0]==f'{k}']
+
+        # Skip folder if reaction list empty
+        if reaction_list_k == []: continue
+        else: pass
+
+        # Copy model data folder
+        os.system(f'cp -r {model_gsm} {gsm_path}')
+
+        # Write initial file for each gsm calculation
+        for i,ind in enumerate(reaction_list_k):
+            gsm_count = str(i+1).zfill(4)
+            isom_k_num = int(ind[2])
+            isom_k_perm[isom_k_num][1] = f'isom num {i} ' + isom_k_perm[isom_k_num][1]
+            write_xyz(isom_k_perm[isom_k_num],f'{gsm_path}scratch/initial{gsm_count}.xyz')
+            isomers_copy[int(ind[1])][1] = f'from perm {isom_k_num} of prev isomer ' + isomers_copy[int(ind[1])][1]
+            append_xyz(isomers_copy[int(ind[1])],f'{gsm_path}scratch/initial{gsm_count}.xyz')
