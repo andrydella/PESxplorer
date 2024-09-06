@@ -125,6 +125,8 @@ def amech_data_structure(filinp):
     import automol
     with open(filinp,'r') as f:
         trajec_string = f.read()
+    # Probably it will be the opposite, I will start from well_dct from Sarah 
+    # and create geos list
     geos = [ geoi for geoi,_ in automol.geom.from_xyz_trajectory_string(trajec_string)]
     well_dct = {f"species_{i}":automol.geom.graph(geoi) for i,geoi in enumerate(geos)}
     print("Here Sarah looks for possible reactivity (assume b2f2)")
@@ -139,3 +141,17 @@ def amech_data_structure(filinp):
     print("I inverted position of atoms 2 and 3 to try switching them back again, so geos2 is same as 1 but inverted atoms")
 
     return geos,well_dct,reac_dct
+
+# k. Swap atoms in automech geometry
+def swap_atoms(atom_order,geo_p):
+    import automol
+
+    visited_ats = set()
+    for at1,at2 in atom_order.items():
+        if at1 not in visited_ats:
+            if at1 != at2:
+                print(f"Swapping ats {at1} {at2}")
+                geo_p = automol.geom.swap_coordinates(geo_p, at1, at2)
+            visited_ats.update([at1,at2])
+
+    return geo_p
