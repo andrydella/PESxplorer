@@ -221,8 +221,15 @@ def setup_gsm(filinp,model_gsm):
             f.write(initial_str)
         with open(f'{gsm_path}/initial{gsm_num}.xyz', 'w') as f:
             f.write(initial_str)
+        with open(f'{gsm_path}/ISOMERS{gsm_num}', 'w') as f:
+            f.write("ADD\n")
+            for a,b in iter(b_formed):
+                f.write(f"{a} {b}\n")
+            f.write("\nBREAK\n")
+            for a,b in iter(b_broken):
+                f.write(f"{a} {b}\n")
 
-# 7. run_gsm()
+# 5. run_gsm()
 def run_gsm():
     os.chdir('GSM_FOLDS')
     gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
@@ -247,7 +254,8 @@ def run_gsm():
             os.chdir('..')
         else: print(f'{fold} empty folder')
 
-
+def run_ssm():
+    pass
 ##################################
 
 
