@@ -203,8 +203,9 @@ def setup_gsm(filinp,model_gsm):
         geo_p = deepcopy(geos[prod_idx])
 
         geo_p = swap_atoms(atom_order,geo_p)
-
+        print(f"Working on reaction {reac_prod}")
         fold_name = f'GSM_FOLDS/{reac_prod[0]}_gsm_fold'
+        print(f"Making folder {fold_name}")
         if not os.path.exists(fold_name): 
             os.mkdir(fold_name)
         if not os.path.exists(f'{fold_name}/scratch'): 
@@ -216,6 +217,7 @@ def setup_gsm(filinp,model_gsm):
         # Write initial file for each gsm calculation
         gsm_counters[reac_prod[0]] += 1
         gsm_num = str(gsm_counters[reac_prod[0]]).zfill(4)
+        print(f"Current counter for reactions of {reac_prod[0]}: {gsm_num}")
         initial_str = automol.geom.xyz_trajectory_string([geo_r,geo_p])
         with open(f'{gsm_path}/scratch/initial{gsm_num}.xyz', 'w') as f:
             f.write(initial_str)
@@ -230,7 +232,7 @@ def setup_gsm(filinp,model_gsm):
                 f.write(f"{a} {b}\n")
 
 # 5. run_gsm()
-def run_gsm():
+def run_gsm(is_ssm):
     os.chdir('GSM_FOLDS')
     gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     gsm_folds.sort()
@@ -238,21 +240,32 @@ def run_gsm():
     # Alternative for cycles for running sets of subfolders
     #for fold in gsm_folds[-2:]:
     #for fold in gsm_folds[-4:-2]:
-    #for fold in gsm_folds[-6:-4]:
-    #for fold in gsm_folds[-7:-6]:
-    #for fold in gsm_folds[-13:-11]:
+
     for fold in gsm_folds:
         if os.listdir(f'{fold}/scratch/') is not []:
             os.chdir(fold)
+            print(f"In folder {fold}, is ssm on? {is_ssm}")
+
+            os.system("cp inpfileq.gsm inpfileq")
+            if is_ssm:
+                os.system("cp inpfileq.ssm inpfileq")
+
             inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
             for i in range(len(inputss)):
-                print(f'gsm.orca {i+1} in {fold}')
-                command = f"./gsm.orca 1 30 &> out{str(i+1).zfill(4)}.log"
-                with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True) as p:
-                    p.communicate()  
-                    p.wait()
+                gsm_num = str(i+1).zfill(4)
+                print(f'gsm.orca {gsm_num} in {fold}')
+                if f"tsq{gsm_num}.xyz" not in os.listdir(f'scratch/'):
+                    print("ts file not found, runnin GSM now")
+                    command = f"./gsm.orca 1 30 &> out{gsm_num}.log"
+                    with subprocess.Popen(command, 
+                                          stdout=subprocess.PIPE, shell=True) as p:
+                        p.communicate()  
+                        p.wait()
+
             os.chdir('..')
-        else: print(f'{fold} empty folder')
+
+        else: 
+            print(f'{fold} empty folder')
 
 def run_ssm():
     pass
@@ -271,7 +284,8 @@ Possible commands are:
 - setup -> sets up GSM folders for each isomer
 - rungsm -> runs all GSM calcs
 '''
-    commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
+ #   commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
+    commands = ["runcrest","unite","selpaths","setup","rungsm","runssm"]
     if len(sys.argv) != 2:
         print(message)
         exit()
@@ -313,7 +327,9 @@ Possible commands are:
         setup_gsm('allcrestprods_sort.xyz',model_gsm)
 # #### 4 ###
     elif command == 'rungsm':
-        run_gsm()
+        run_gsm(False)
+    elif command == 'runssm':
+        run_gsm(True)
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 # # #### 1 ###
