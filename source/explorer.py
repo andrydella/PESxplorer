@@ -3,13 +3,13 @@
 # Andrea Della Libera
 
 # IN PROGRESS: #
-# 1. Interface automol for the species
-# 2. use automol.find for selpaths
+# 1. use automol.find for selpaths (handshake)
+# 2. use info on form and break bonds to setup fallback with SSM
+# 1. postprocess GSM (and eventually call fallback, and postprocess again)
 
 # TO DO: #
 # 1. Interface MOLGEN output
-# 2. Fromat better logfile
-# 3. Generalize once more CREST output reading as even with new version more iterations are required! 
+# 2. Format better logfile
 
 # Modules import
 import os
@@ -17,7 +17,6 @@ import sys
 import subprocess
 import csv
 from copy import deepcopy
-import generalized_permutations as gen_perm
 from auxiliary_funcs import *
 from old_bondcheck import *
 
@@ -179,134 +178,49 @@ def sort_xyz(filinp,charge,spin):
     write_xyzlist(isomers,'allcrestprods_sort.xyz')
 
 
-
 # 3. Use find.py to get possible reactions
-def find_reactions(filinp):
+def find_reactions():
+    print("Here SNE is working")
+
+# 4. Convert data structures and setup GSM calculations
+def setup_gsm(filinp,model_gsm):
     import automol
 
     geos,well_dct,reac_dct = amech_data_structure(filinp)
+
+    os.system('mkdir -p GSM_FOLDS')
+    gsm_counters = {spc:0 for spc,_ in well_dct.items()}
 
     for reaction,stuff in reac_dct.items():
         reac_prod = [spc.strip() for spc in reaction.split("=")]
         reac_prod_idxs = [spc.split("_")[1] for spc in reac_prod]
         reac_idx = int(reac_prod_idxs[0])
-        print(reac_idx)
         prod_idx = int(reac_prod_idxs[1])
         atom_order = stuff[0]
         b_formed = stuff[1]
         b_broken = stuff[2]
-        print(reac_prod,b_formed,b_broken)
         geo_r = deepcopy(geos[reac_idx])
         geo_p = deepcopy(geos[prod_idx])
 
-        visited_ats = set()
-        for at1,at2 in atom_order.items():
-            if at1 not in visited_ats:
-                if at1 != at2:
-                    print(f"Swapping ats {at1} {at2}")
-                    automol.geom.swap_coordinates(geo_p, at1, at2)
-                visited_ats.update([at1,at2])
+        geo_p = swap_atoms(atom_order,geo_p)
 
-
-
-# 5. Select paths with permutations
-def sel_paths(filinp):
-    # Creates folder to store permutations of isomers
-    if 'perm_folder' not in os.listdir(): os.mkdir('perm_folder')
-
-    # Contains [isom K - isom I - permutC Z - permutH H]
-    gsm_list = []
-    gsm_included = set()
-    open('selectedpaths.txt','w').close()
-    with open('natoms_unite.txt','r') as f:
-        n_atoms = int(f.read())
-    isomers = read_xyzlist(filinp,n_atoms)
-    _,conn_mat,_ = conn_dist(isomers)
-
-    write_log('\nEntering permutations loop..:\n')
-    for k,isomer in enumerate(isomers):
-        write_log(f'Working on isomer {k}\n')
-        prefix = [el for el in isomer[:2]]
-        # Crea permutations of isomer K
-        isom_k_permuts = gen_perm.generate_molecule_permutations(isomer[2:]) #,conn_mat[k]
-        write_log(f'Number of permutations {len(isom_k_permuts)}\n')
-
-        for h,permutation in enumerate(isom_k_permuts):
-            # Define useful variables
-            isomers_copy = [el for el in isomers]
-            isomers_copy[k] = prefix + permutation
-
-            ##CONN MAT QUI
-            _,conn_mat_copy,_ = conn_dist(isomers_copy)
-
-            # Define number of broken / added bonds
-            # "leaf from tree in forest for leaf in tree"
-            k_bonds = [item for sublist in conn_mat_copy[k] for item in sublist]
-            for i in range(k+1,len(conn_mat_copy)):
-                curr_bonds = [item for sublist in conn_mat_copy[i] for item in sublist]
-                is_same = [ x for x in map(lambda x,y: x==y, k_bonds,curr_bonds)]
-                #print(i+k,is_same.count(False))
-                if is_same.count(False)<5: # Up to break2form2
-                    gsm_list.append([k, i, h])
-                    gsm_included.add(k)
-                    gsm_included.add(i)
-
-        # Writes permutations in file for isomer k
-        write_log(f"Writing permutations of isomer {k} in perm_folder/permutations_{k}.xyz..\n")
-        write_xyzlist([prefix+iso for iso in isom_k_permuts],f'perm_folder/permutations_{k}.xyz')
-
-    with open(f'gsm_global.txt','w') as g:
-        for lst in gsm_list: g.write(f'{lst}\n')
-
-    write_log(str(list(gsm_included)))
-
-# 6. setup_gsm from gsm_filter file and perm_bondcheck list of isomers
-# NON TIENE LO STESSO ORDINE DELLE PERMUTAZIONI - salvo gli xyz in bond_check3
-def setup_gsm(gsminp,isomlist,model_gsm):
-
-    # Get isomers list and n atoms
-    with open('natoms_unite.txt','r') as f:
-        n_atoms = int(f.read())
-    isomers = read_xyzlist(isomlist,n_atoms)
-
-    # Get reaction list from gsm_filter.xyz
-    with open(gsminp,'r') as f:
-         reaction_list = list(csv.reader(f, delimiter=","))
-
-    # create gsm folders
-    os.system('mkdir -p GSM_FOLDS')
-    for k,isomer in enumerate(isomers):
-        # Setup GSM folder
-        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
-        if not os.path.exists(fold_name): os.mkdir(fold_name)
-        if not os.path.exists(f'{fold_name}/scratch'): os.mkdir(f'{fold_name}/scratch')
-        gsm_path = os.getcwd()+f'/{fold_name}/'
-
-    for k,isomer in enumerate(isomers):
-        isom_k_perm = read_xyzlist(f'perm_folder/permutations_{k}.xyz',n_atoms)
-        isomers_copy = [el for el in isomers] # Duplicate list for modfying it
-        # Get GSM folder name and path
-        fold_name = f'GSM_FOLDS/{k}_gsm_fold'
-        gsm_path = os.getcwd()+f'/{fold_name}/'
-
-        # Get list of reactions to study
-        reaction_list_k = [el for el in reaction_list if el[0]==f'{k}']
-
-        # Skip folder if reaction list empty
-        if reaction_list_k == []: continue
-        else: pass
-
+        fold_name = f'GSM_FOLDS/{reac_prod[0]}_gsm_fold'
+        if not os.path.exists(fold_name): 
+            os.mkdir(fold_name)
+        if not os.path.exists(f'{fold_name}/scratch'): 
+            os.mkdir(f'{fold_name}/scratch')
+        gsm_path = os.getcwd()+f'/{fold_name}'
         # Copy model data folder
         os.system(f'cp -r {model_gsm} {gsm_path}')
 
         # Write initial file for each gsm calculation
-        for i,ind in enumerate(reaction_list_k):
-            gsm_count = str(i+1).zfill(4)
-            isom_k_num = int(ind[2])
-            isom_k_perm[isom_k_num][1] = f'isom num {i} ' + isom_k_perm[isom_k_num][1]
-            write_xyz(isom_k_perm[isom_k_num],f'{gsm_path}scratch/initial{gsm_count}.xyz')
-            isomers_copy[int(ind[1])][1] = f'from perm {isom_k_num} of prev isomer ' + isomers_copy[int(ind[1])][1]
-            append_xyz(isomers_copy[int(ind[1])],f'{gsm_path}scratch/initial{gsm_count}.xyz')
+        gsm_counters[reac_prod[0]] += 1
+        gsm_num = str(gsm_counters[reac_prod[0]]).zfill(4)
+        initial_str = automol.geom.xyz_trajectory_string([geo_r,geo_p])
+        with open(f'{gsm_path}/scratch/initial{gsm_num}.xyz', 'w') as f:
+            f.write(initial_str)
+        with open(f'{gsm_path}/initial{gsm_num}.xyz', 'w') as f:
+            f.write(initial_str)
 
 # 7. run_gsm()
 def run_gsm():
@@ -325,8 +239,11 @@ def run_gsm():
             os.chdir(fold)
             inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
             for i in range(len(inputss)):
-                print(f'rungsm {i+1} in {fold}')
-                os.system(f'rungsm {i+1}')
+                print(f'gsm.orca {i+1} in {fold}')
+                command = f"./gsm.orca 1 30 &> out{str(i+1).zfill(4)}.log"
+                with subprocess.Popen(command, stdout=subprocess.PIPE, shell=True) as p:
+                    p.communicate()  
+                    p.wait()
             os.chdir('..')
         else: print(f'{fold} empty folder')
 
@@ -336,7 +253,7 @@ def run_gsm():
 
 def main():
     message='''
-Need to provied an argument to the explorer!
+Need to provide an argument to the explorer!
 Possible commands are:
 - runcrest -> runs preliminary CREST calculations
 - unite -> reads the output of CREST calculations and collects results in a trajectory text file
@@ -374,31 +291,45 @@ Possible commands are:
 
     at_num = {'1':'H','6':'C','8':'O','7':'N'}
 
- #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 
 # #### 1 ###
     if command == 'runcrest':
         crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
     elif command == 'unite':
-        unite_xyz(crest_md_path,crest_out_name) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+        unite_xyz(crest_md_path,crest_out_name) # -> allcrestprods_unite.xyz
         sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # #### 2 ###
-    elif command == 'bond_check':
-        find_reactions('allcrestprods_sort.xyz')
-        # _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
-        # #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
-        # os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
-        # bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
     elif command == 'selpaths':
-        sel_paths('perm_bondcheck.xyz')
-# #### 3 ###
-    elif command == 'filter':
-        filter_gsm('gsm_global.txt')
+        find_reactions()
     elif command == 'setup':
-        setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
+        setup_gsm('allcrestprods_sort.xyz',model_gsm)
 # #### 4 ###
     elif command == 'rungsm':
         run_gsm()
+
+ #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
+# # #### 1 ###
+#     if command == 'runcrest':
+#         crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
+#     elif command == 'unite':
+#         unite_xyz(crest_md_path,crest_out_name) #Skips if allcrestprods_unite is already there; protocol depends on version of crest
+#         sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
+# # #### 2 ###
+#     elif command == 'bond_check':
+#         _,connect,_ = bond_check('allcrestprods_sort.xyz',at_num) # -> unique_bondcheck.xyz
+#         #_,_,_ = remove_frags('unique_bondcheck.xyz') # -> nofrags_bondcheck.xyz
+#         os.system('cp unique_bondcheck.xyz nofrags_bondcheck.xyz')
+#         bond_check3('nofrags_bondcheck.xyz') # -> perm_bondcheck.xyz
+#     elif command == 'selpaths':
+#         sel_paths('perm_bondcheck.xyz')
+# # #### 3 ###
+#     elif command == 'filter':
+#         filter_gsm('gsm_global.txt')
+#     elif command == 'setup':
+#         setup_gsm('gsm_filter.txt','perm_bondcheck.xyz',model_gsm)
+# # #### 4 ###
+#     elif command == 'rungsm':
+#         run_gsm()
 
 if __name__=="__main__":
     main()
