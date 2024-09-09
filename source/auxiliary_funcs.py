@@ -1,4 +1,5 @@
 from itertools import permutations
+import pickle
 import csv
 
 # Auxilliary functions (| in the comments means 'or')
@@ -155,3 +156,13 @@ def swap_atoms(atom_order,geo_p):
             visited_ats.update([at1,at2])
 
     return geo_p
+
+# l.
+def write_pickle(data,name):
+    with open(f"{name}.pickle","wb") as f:
+        pickle.dump(data,f,pickle.HIGHEST_PROTOCOL)
+
+# m.
+def read_pickle(name):
+    with open(name + '.pickle', 'rb') as f:
+        return pickle.load(f)

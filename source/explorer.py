@@ -19,6 +19,7 @@ import subprocess
 from copy import deepcopy
 from auxiliary_funcs import *
 from old_bondcheck import *
+from find_from_traj import finder
 
 #############################
 
@@ -180,13 +181,19 @@ def sort_xyz(filinp,charge,spin):
 
 # 3. Use find.py to get possible reactions
 def find_reactions():
-    print("Here SNE is working")
+    geos,well_dct,reac_dct = finder()
+    write_pickle(geos,"geos")
+    write_pickle(well_dct,"wells")
+    write_pickle(reac_dct,"rxns")
 
 # 4. Convert data structures and setup GSM calculations
 def setup_gsm(filinp,model_gsm):
     import automol
 
-    geos,well_dct,reac_dct = amech_data_structure(filinp)
+    # geos,well_dct,reac_dct = amech_data_structure(filinp)
+    geos = read_pickle("geos")
+    well_dct = read_pickle("wells")
+    reac_dct = read_pickle("rxns")
 
     os.system('mkdir -p GSM_FOLDS')
     gsm_counters = {spc:0 for spc,_ in well_dct.items()}
