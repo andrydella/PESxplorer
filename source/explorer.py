@@ -267,7 +267,7 @@ def run_gsm(is_ssm):
                 gsm_num = str(i+1).zfill(4)
                 print(f'gsm.orca {gsm_num} in {fold}')
                 if f"tsq{gsm_num}.xyz" not in os.listdir(f'scratch/'):
-                    print("ts file not found, runnin GSM or SSM now")
+                    write_log("ts file not found, runnin GSM or SSM now")
                     command = f"./gsm.orca {i+1} 30 &> out{gsm_num}.log"
                     with subprocess.Popen(command, 
                                           stdout=subprocess.PIPE, shell=True) as p:
