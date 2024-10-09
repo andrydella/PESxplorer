@@ -19,20 +19,20 @@ def _geom_to_graph(args):
 
 def _names_to_reaction(args): #adl
     rxn_dct = {}
-    # rname, rgras, pname, pgras = args
-    # if len(rgras) + len(pgras) < 4:
-    #     iso_dct, frm_bnd_lst, brk_bnd_lst = automol.reac.arbitrary_reactions(
-    #         rgras, pgras)
-    #     if iso_dct:
-    #         rxn_dct[rname + ' = ' + pname] = (iso_dct, frm_bnd_lst, brk_bnd_lst)
-    isomorph = {i:i for i in range(14)}
-    rxn_dct = {"species_0 = species_1":(isomorph,frozenset([(3,8),(2,4)]),frozenset([(2,8),(3,4)]))}
+    rname, rgras, pname, pgras = args
+    if len(rgras) + len(pgras) < 4:
+        iso_dct, frm_bnd_lst, brk_bnd_lst = automol.reac.arbitrary_reactions(
+            rgras, pgras)
+        if iso_dct:
+            rxn_dct[rname + ' = ' + pname] = (iso_dct, frm_bnd_lst, brk_bnd_lst)
+    # isomorph = {i:i for i in range(14)}
+    # rxn_dct = {"species_0 = species_1":(isomorph,frozenset([(3,8),(2,4)]),frozenset([(2,8),(3,4)]))}
     return rxn_dct
 
 
-def finder(): #adl
-    traj_str = pa.read_file('/lcrc/project/PACC/adl/qm/EXPLORER/test-sarah', 'allcrestprods_sort.xyz') #adl
-    input_str = pa.read_file('/lcrc/project/PACC/adl/qm/EXPLORER/test-sarah', 'input-stru.xyz') #adl
+def finder(path): #adl
+    traj_str = pa.read_file(path, 'allcrestprods_sort.xyz') #adl
+    # input_str = pa.read_file('/lcrc/project/PACC/adl/qm/EXPLORER/test-sarah', 'input-stru.xyz') #adl
     geo_lst = automol.geom.from_xyz_trajectory_string(traj_str)
     idx_geo_lst = [(geo, ene, idx) for idx, (geo, ene) in enumerate(geo_lst)] #adl
 
