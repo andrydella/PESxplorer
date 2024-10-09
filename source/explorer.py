@@ -25,7 +25,7 @@ from find_from_traj import finder
 
 # Functions
 #0. Setup CREST calculation
-def crest_calc(filename,calcs,charge,spin):
+def crest_calc(filename,crest_out_name,calcs,charge,spin):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
     dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
@@ -50,7 +50,7 @@ def crest_calc(filename,calcs,charge,spin):
         elif calc_type == 'msreact':
             command = 'crest INPUT --msreact --msnshifts 800 --msnshifts2 15 --msmolbar --T 30 –ewin 100. &> msreact.out'
             command = command.replace('INPUT',f'{filename}')
-            outfile = 'isomers.xyz'
+            outfile = crest_out_name
         elif calc_type == 'ensemble':
             command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo --T 30 &> ensemble.out'
             command = command.replace('INPUT',f'{filename}')
@@ -163,7 +163,7 @@ def unite_xyz(md_path,md_name):
     #         write_xyzlist(isomers,'allcrestprods_unite.xyz')
 
 # 2. Reorder isomers based on energy
-def sort_xyz(filinp,charge,spin):
+def sort_xyz(filinp,crest_out_name,charge,spin):
     isomers = []
     with open('natoms_unite.txt','r') as f:
         n_atoms = int(f.read())
@@ -172,7 +172,7 @@ def sort_xyz(filinp,charge,spin):
     try:
         isomers.sort(key=lambda x:float(x[1].split()[0]))
     except:
-        crest_calc(filinp,['sp'],charge,spin)
+        crest_calc(filinp,crest_out_name,['sp'],charge,spin)
         os.system(f'cp crest_ensemble.xyz {filinp}_sp')
         isomers = read_xyzlist(f'{filinp}_sp',n_atoms)
         isomers.sort(key=lambda x:float(x[1].split()[0]))
@@ -181,7 +181,7 @@ def sort_xyz(filinp,charge,spin):
 
 # 3. Use find.py to get possible reactions
 def find_reactions():
-    geos,well_dct,reac_dct = finder()
+    geos,well_dct,reac_dct = finder(os.getcwd())
     write_pickle(geos,"geos")
     write_pickle(well_dct,"wells")
     write_pickle(reac_dct,"rxns")
@@ -326,10 +326,10 @@ Possible commands are:
 
 # #### 1 ###
     if command == 'runcrest':
-        crest_calc('input-stru.xyz', ['opt','msreact','ensemble'],charge,spin)
+        crest_calc('input-stru.xyz', crest_out_name, ['opt','msreact','ensemble'],charge,spin)
     elif command == 'unite':
         unite_xyz(crest_md_path,crest_out_name) # -> allcrestprods_unite.xyz
-        sort_xyz('allcrestprods_unite.xyz',charge,spin) # -> allcrestprods_sort.xyz
+        sort_xyz('allcrestprods_unite.xyz','crest_ensemble.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # #### 2 ###
     elif command == 'selpaths':
         find_reactions()
