@@ -211,9 +211,9 @@ def setup_gsm(filinp,model_gsm,spin,charge):
         geo_p = deepcopy(geos[prod_idx])
 
         geo_p = swap_atoms(atom_order,geo_p)
-        print(f"Working on reaction {reac_prod}")
+        write_log(f"Working on reaction {reac_prod}")
         fold_name = f'GSM_FOLDS/{reac_prod[0]}_gsm_fold'
-        print(f"Making folder {fold_name}")
+        write_log(f"Making folder {fold_name}")
         if not os.path.exists(fold_name): 
             os.mkdir(fold_name)
         if not os.path.exists(f'{fold_name}/scratch'): 
@@ -225,7 +225,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
         # Write initial file for each gsm calculation
         gsm_counters[reac_prod[0]] += 1
         gsm_num = str(gsm_counters[reac_prod[0]]).zfill(4)
-        print(f"Current counter for reactions of {reac_prod[0]}: {gsm_num}")
+        write_log(f"Current counter for reactions of {reac_prod[0]}: {gsm_num}")
         initial_str = automol.geom.xyz_trajectory_string([geo_r,geo_p])
         with open(f'{gsm_path}/scratch/initial{gsm_num}.xyz', 'w') as f:
             f.write(initial_str)
@@ -250,7 +250,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
             f.write(f"{reac_prod[0]}, {reac_prod[1]}, {fold_name}, {gsm_num}\n")
 
 # 5. run_gsm()
-def run_gsm(is_ssm,gsm_theory):
+def run_gsm(is_ssm,gsm_theory,path_to_log):
     os.chdir('GSM_FOLDS')
     gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     gsm_folds.sort()
@@ -267,6 +267,8 @@ def run_gsm(is_ssm,gsm_theory):
         if os.listdir(f'{fold}/scratch/') is not []:
             os.chdir(fold)
             print(f"In folder {fold}, is ssm on? {is_ssm}")
+            write_log(f"In folder {fold}, is ssm on? {is_ssm}",path_to_log)
+
 
             os.system("cp inpfileq.gsm inpfileq")
             if is_ssm:
@@ -275,9 +277,9 @@ def run_gsm(is_ssm,gsm_theory):
             inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
             for i in range(len(inputss)):
                 gsm_num = str(i+1).zfill(4)
-                write_log(f'Running gsm.{gsm_theory} {gsm_num} in {fold}')
+                write_log(f'Running gsm.{gsm_theory} {gsm_num} in {fold}',path_to_log)
                 if f"tsq{gsm_num}.xyz" not in os.listdir(f'scratch/'):
-                    write_log(f"ts file not found, running {who_am_i} now")
+                    write_log(f"ts file not found, running {what_am_i} now",path_to_log)
                     if gsm_theory == 'xtb':
                         command = f"./gsm.orca {i+1} 30 &> out{gsm_num}.log"
                     else:
@@ -286,11 +288,13 @@ def run_gsm(is_ssm,gsm_theory):
                                           stdout=subprocess.PIPE, shell=True) as p:
                         p.communicate()  
                         p.wait()
+                else:
+                    write_log(f"ts FOUND, skipping {what_am_i}",path_to_log)
 
             os.chdir('..')
 
         else: 
-            write_log(f'{fold} empty folder')
+            write_log(f'{fold} empty folder',path_to_log)
 
 ##################################
 
@@ -334,6 +338,7 @@ Possible commands are:
     assert gsm_theory in ['g16','xtb'], "xtb or g16 directives required for GSM"
 
     open('logfile.out','w').close() # Create logfile
+    path_to_log = os.getcwd()+'/'
     write_log(lines)
 
     at_num = {'1':'H','6':'C','8':'O','7':'N'}
@@ -352,9 +357,9 @@ Possible commands are:
         setup_gsm('allcrestprods_sort.xyz',model_gsm,spin,charge)
 # #### 4 ###
     elif command == 'rungsm':
-        run_gsm(False,gsm_theory)
+        run_gsm(False,gsm_theory,path_to_log)
     elif command == 'runssm':
-        run_gsm(True,gsm_theory)
+        run_gsm(True,gsm_theory,path_to_log)
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 # # #### 1 ###

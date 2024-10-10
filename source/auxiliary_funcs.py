@@ -16,8 +16,8 @@ def append_xyz(xyz_list,filname):
             f.write(line+'\n')
 
 # b. Write log file
-def write_log(stuff_to_write):
-    with open('logfile.out','a') as f:
+def write_log(stuff_to_write,path_to_log=''):
+    with open(f"{path_to_log}logfile.out","a") as f:
         if type(stuff_to_write) == type('str'): f.write(stuff_to_write+'\n')
         elif type(stuff_to_write) == type(1): f.write(str(stuff_to_write)+'\n')
         else: f.writelines(stuff_to_write) # For lists
