@@ -239,11 +239,11 @@ def setup_gsm(filinp,model_gsm,spin,charge):
                 f.write(f"BREAK  {a} {b}\n")
         # Also write charge and spin where useful
         with open(f'{gsm_path}/scratch/.UHF','w') as f:
-            f.write(str(spin))
+            f.write(spin)
         with open(f'{gsm_path}/scratch/.CHRG','w') as f:
-            f.write(str(charge))
-        os.command(f"sed -i 's/SPIN/{spin}/g' {gsm_path}/gstart")
-        os.command(f"sed -i 's/CHARGE/{charge}/g' {gsm_path}/gstart")
+            f.write(charge)
+        os.system(f"sed -i 's/SPIN/{int(spin)+1}/g' {gsm_path}/gstart")
+        os.system(f"sed -i 's/CHARGE/{charge}/g' {gsm_path}/gstart")
         
         # Write csv file that collect info on reacions found
         with open("reacions.csv","a") as f:
