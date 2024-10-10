@@ -187,7 +187,7 @@ def find_reactions():
     write_pickle(reac_dct,"rxns")
 
 # 4. Convert data structures and setup GSM calculations
-def setup_gsm(filinp,model_gsm):
+def setup_gsm(filinp,model_gsm,spin,charge):
     import automol
 
     # geos,well_dct,reac_dct = amech_data_structure(filinp)
@@ -232,27 +232,37 @@ def setup_gsm(filinp,model_gsm):
         with open(f'{gsm_path}/initial{gsm_num}.xyz', 'w') as f:
             f.write(initial_str)
         with open(f'{gsm_path}/ISOMERS{gsm_num}', 'w') as f:
-            f.write("ADD\n")
             for a,b in iter(b_formed):
-                f.write(f"{a} {b}\n")
-            f.write("\nBREAK\n")
+                f.write(f"ADD  {a} {b}\n")
+            f.write("\n")
             for a,b in iter(b_broken):
-                f.write(f"{a} {b}\n")
+                f.write(f"BREAK  {a} {b}\n")
+        # Also write charge and spin where useful
+        with open(f'{gsm_path}/scratch/.UHF','w') as f:
+            f.write(str(spin))
+        with open(f'{gsm_path}/scratch/.CHRG','w') as f:
+            f.write(str(charge))
+        os.command(f"sed -i 's/SPIN/{spin}/g' {gsm_path}/gstart")
+        os.command(f"sed -i 's/CHARGE/{charge}/g' {gsm_path}/gstart")
         
         # Write csv file that collect info on reacions found
         with open("reacions.csv","a") as f:
             f.write(f"{reac_prod[0]}, {reac_prod[1]}, {fold_name}, {gsm_num}\n")
 
 # 5. run_gsm()
-def run_gsm(is_ssm):
+def run_gsm(is_ssm,gsm_theory):
     os.chdir('GSM_FOLDS')
     gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     gsm_folds.sort()
 
+    if is_ssm:
+        what_am_i = 'SSM'
+    else:
+        what_am_i = 'GSM'
+
     # Alternative for cycles for running sets of subfolders
     #for fold in gsm_folds[-2:]:
     #for fold in gsm_folds[-4:-2]:
-
     for fold in gsm_folds:
         if os.listdir(f'{fold}/scratch/') is not []:
             os.chdir(fold)
@@ -265,10 +275,13 @@ def run_gsm(is_ssm):
             inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
             for i in range(len(inputss)):
                 gsm_num = str(i+1).zfill(4)
-                print(f'gsm.orca {gsm_num} in {fold}')
+                write_log(f'Running gsm.{gsm_theory} {gsm_num} in {fold}')
                 if f"tsq{gsm_num}.xyz" not in os.listdir(f'scratch/'):
-                    write_log("ts file not found, runnin GSM or SSM now")
-                    command = f"./gsm.orca {i+1} 30 &> out{gsm_num}.log"
+                    write_log(f"ts file not found, running {who_am_i} now")
+                    if gsm_theory == 'xtb':
+                        command = f"./gsm.orca {i+1} 30 &> out{gsm_num}.log"
+                    else:
+                        command = f"gsm {i+1} 30 &> out{gsm_num}.log"
                     with subprocess.Popen(command, 
                                           stdout=subprocess.PIPE, shell=True) as p:
                         p.communicate()  
@@ -277,7 +290,7 @@ def run_gsm(is_ssm):
             os.chdir('..')
 
         else: 
-            print(f'{fold} empty folder')
+            write_log(f'{fold} empty folder')
 
 ##################################
 
@@ -288,9 +301,9 @@ Need to provide an argument to the explorer!
 Possible commands are:
 - runcrest -> runs preliminary CREST calculations
 - unite -> reads the output of CREST calculations and collects results in a trajectory text file
-- bond_check -> select unique isomers and eventually bimolecular products
+- [Deprecated] bond_check -> select unique isomers and eventually bimolecular products
 - selpaths -> create global_gsm.txt
-- filter -> creates filter_gsm.txt
+- [Deprecated] filter -> creates filter_gsm.txt
 - setup -> sets up GSM folders for each isomer
 - rungsm -> runs all GSM calcs
 '''
@@ -317,6 +330,8 @@ Possible commands are:
     crest_out_name = config['crest_out_name']
     charge = config['charge']
     spin = config['spin']
+    gsm_theory = config['gsm_theory']
+    assert gsm_theory in ['g16','xtb'], "xtb or g16 directives required for GSM"
 
     open('logfile.out','w').close() # Create logfile
     write_log(lines)
@@ -334,12 +349,12 @@ Possible commands are:
     elif command == 'selpaths':
         find_reactions()
     elif command == 'setup':
-        setup_gsm('allcrestprods_sort.xyz',model_gsm)
+        setup_gsm('allcrestprods_sort.xyz',model_gsm,spin,charge)
 # #### 4 ###
     elif command == 'rungsm':
-        run_gsm(False)
+        run_gsm(False,gsm_theory)
     elif command == 'runssm':
-        run_gsm(True)
+        run_gsm(True,gsm_theory)
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 # # #### 1 ###

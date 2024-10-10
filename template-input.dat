@@ -7,3 +7,5 @@ model_gsm = /PATH/TO/GSM/MODEL/DATA/FOLDER/*
     # root name of metadyns folders (if version < 3.0)
 # or name of the output file containing isomers only (if version >= 3.0)
 crest_out_name = isomers.xyz
+#GSM level of theory
+gsm_theory = xtb
