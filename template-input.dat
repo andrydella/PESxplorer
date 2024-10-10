@@ -1,11 +1,18 @@
 model_gsm = /PATH/TO/GSM/MODEL/DATA/FOLDER/*
-    # 3.0 is threshold for chooising how to collect CREST output
-    crest_version = '3.0'
-    # Folder containing metadyns subdir (if version < 3.0)
-    # or output files (if version >= 3.0)
-  crest_md_path = crest_metadyns/
-    # root name of metadyns folders (if version < 3.0)
-# or name of the output file containing isomers only (if version >= 3.0)
-crest_out_name = isomers.xyz
+
+# 3.0 is threshold for chooising how to collect CREST output
+# Other versions are deprecated at the moment
+crest_version = '3.0'
+
+# Folder (in main working dir) containin output files (if version >= 3.0)
+crest_md_path = crest_calcs_1
+
+# Name of the output file (if version >= 3.0)
+crest_out_name = crest_msreact_products.xyz
+
 #GSM level of theory
 gsm_theory = xtb
+
+# Charge and spin (molpro style)
+charge = 0
+spin = 0
