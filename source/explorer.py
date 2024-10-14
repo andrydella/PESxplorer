@@ -52,7 +52,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
-            command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo --T 30 &> ensemble.out'
+            command = 'crest crestopt.xyz --cregen INPUT --ewin 10000. --notopo --T 30 &> ensemble.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         elif calc_type == 'sp':
