@@ -1,6 +1,7 @@
 from itertools import permutations
 import pickle
 import csv
+import automol
 
 # Auxilliary functions (| in the comments means 'or')
 # a. write xyz from list in the form [natom,energy|empty,coords1,...,coordsn]
@@ -123,7 +124,7 @@ def is_single_molecule(graph):
 
 #j. Interface with automol
 def amech_data_structure(filinp):
-    import automol
+
     with open(filinp,'r') as f:
         trajec_string = f.read()
     # Probably it will be the opposite, I will start from well_dct from Sarah 
@@ -145,15 +146,19 @@ def amech_data_structure(filinp):
 
 # k. Swap atoms in automech geometry
 def swap_atoms(atom_order,geo_p):
-    import automol
 
-    visited_ats = set()
+    # Invert dictionary so that product can be ordered as reactant
+    reversed_atom_order = {}
+
+    len_geo = len(geo_p)
     for at1,at2 in atom_order.items():
-        if at1 not in visited_ats:
-            if at1 != at2:
-                print(f"Swapping ats {at1} {at2}")
-                geo_p = automol.geom.swap_coordinates(geo_p, at1, at2)
-            visited_ats.update([at1,at2])
+        reversed_atom_order[at2] = at1
+    
+    for i in range(len_geo):
+        if i not in reversed_atom_order.keys():
+            reversed_atom_order[i] = i
+
+    geo_p = automol.geom.reorder(geo_p,reversed_atom_order)
 
     return geo_p
 

@@ -56,7 +56,7 @@ def finder(path): #adl
     for rxn_dct in all_rxn_dct:
         rxns_dct.update(rxn_dct)
     
-    geo_lst = [ geoi for geoi,_ in automol.geom.from_xyz_trajectory_string(traj_str)] #adl
+    geo_lst = [ geoi for geoi,_ in automol.geom.from_xyz_trajectory_string(traj_str)]
 
     return geo_lst, wells_dct, rxns_dct
 

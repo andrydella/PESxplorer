@@ -48,7 +48,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crestopt.xyz'
         elif calc_type == 'msreact':
-            command = 'crest INPUT --msreact --msnshifts 800 --msnshifts2 15 --msmolbar --T 30 –ewin 100. &> msreact.out'
+            command = 'crest INPUT --msreact --msnshifts 800 --msnshifts2 15 --msmolbar --T 30 –ewin 10000. &> msreact.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
@@ -211,6 +211,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
         geo_p = deepcopy(geos[prod_idx])
 
         geo_p = swap_atoms(atom_order,geo_p)
+
         write_log(f"Working on reaction {reac_prod}")
         fold_name = f'GSM_FOLDS/{reac_prod[0]}_gsm_fold'
         write_log(f"Making folder {fold_name}")
@@ -310,10 +311,14 @@ Possible commands are:
 - [Deprecated] filter -> creates filter_gsm.txt
 - setup -> sets up GSM folders for each isomer
 - rungsm -> runs all GSM calcs
+- runssm -> runs SSM calculations ad fallback
 '''
  #   commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
     commands = ["runcrest","unite","selpaths","setup","rungsm","runssm"]
     if len(sys.argv) != 2:
+        print(message)
+        exit()
+    elif sys.argv[1] in ["help","-help","--help","-h","--h"]:
         print(message)
         exit()
     assert sys.argv[1] in commands
