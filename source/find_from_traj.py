@@ -7,7 +7,7 @@ import automol
 
 def _geom_to_graph(args):
     geo, ene, i = args
-    gra = automol.graph.implicit(automol.geom.graph(geo))
+    gra = automol.geom.graph(geo)
     gras =  automol.graph.connected_components(gra)
     if len(ene.split('=')) > 1:
         ene = ene.split('=')[1].split()[0]

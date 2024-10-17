@@ -198,7 +198,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
     os.system('mkdir -p GSM_FOLDS')
     gsm_counters = {spc:0 for spc,_ in well_dct.items()}
 
-    open("reacions.csv","w").close()
+    open("reactions.csv","w").close()
     for reaction,stuff in reac_dct.items():
         reac_prod = [spc.strip() for spc in reaction.split("=")]
         reac_prod_idxs = [spc.split("_")[1] for spc in reac_prod]
