@@ -48,7 +48,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crestopt.xyz'
         elif calc_type == 'msreact':
-            command = 'crest INPUT --msreact --msnshifts 800 --msnshifts2 15 --msmolbar --T 30 –ewin 10000. &> msreact.out'
+            command = 'crest INPUT --msreact --msnshifts 300 --msnshifts2 15 --msmolbar --T 30 –ewin 500. &> msreact.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
@@ -56,7 +56,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         elif calc_type == 'sp':
-            command = 'crest --for INPUT --prop singlepoint --ewin 10000. --notopo &> energy.out'
+            command = 'crest --for INPUT --prop singlepoint --ewin 300. --notopo &> energy.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         else:
@@ -311,7 +311,7 @@ Possible commands are:
 - [Deprecated] filter -> creates filter_gsm.txt
 - setup -> sets up GSM folders for each isomer
 - rungsm -> runs all GSM calcs
-- runssm -> runs SSM calculations ad fallback
+- runssm -> runs SSM calculations as fallback
 '''
  #   commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
     commands = ["runcrest","unite","selpaths","setup","rungsm","runssm"]
@@ -358,6 +358,7 @@ Possible commands are:
 # #### 2 ###
     elif command == 'selpaths':
         find_reactions()
+# #### 3 ###
     elif command == 'setup':
         setup_gsm('allcrestprods_sort.xyz',model_gsm,spin,charge)
 # #### 4 ###
