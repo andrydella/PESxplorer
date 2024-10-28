@@ -56,7 +56,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         elif calc_type == 'sp':
-            command = 'crest --for INPUT --prop singlepoint --ewin 300. --notopo &> energy.out'
+            command = 'crest --for INPUT --prop singlepoint --ewin 50. --notopo &> energy.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         else:
@@ -185,6 +185,8 @@ def find_reactions():
     write_pickle(geos,"geos")
     write_pickle(well_dct,"wells")
     write_pickle(reac_dct,"rxns")
+    write_log(f"Number of species considered: {len(geos)}")
+    write_log(f"Number of reactions found: {len(reac_dct.keys())}")
 
 # 4. Convert data structures and setup GSM calculations
 def setup_gsm(filinp,model_gsm,spin,charge):
@@ -246,8 +248,8 @@ def setup_gsm(filinp,model_gsm,spin,charge):
         os.system(f"sed -i 's/SPIN/{int(spin)+1}/g' {gsm_path}/gstart")
         os.system(f"sed -i 's/CHARGE/{charge}/g' {gsm_path}/gstart")
         
-        # Write csv file that collect info on reacions found
-        with open("reacions.csv","a") as f:
+        # Write csv file that collect info on reactions found
+        with open("reactions.csv","a") as f:
             f.write(f"{reac_prod[0]}, {reac_prod[1]}, {fold_name}, {gsm_num}\n")
 
 # 5. run_gsm()
