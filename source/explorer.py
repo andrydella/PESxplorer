@@ -6,6 +6,7 @@
 # 1. postprocess GSM (and eventually call fallback, and postprocess again)
 # 2. Use EStokTP grid search for TS finding as fallback to GSM
 # 3. Setup EStokTP and AMech workind dirs
+# 4. COrreclty handle CREST output files
 
 # TO DO: #
 # 1. Interface MOLGEN output
@@ -18,9 +19,11 @@ import subprocess
 import re
 #import csv
 from copy import deepcopy
+from scipy.signal import find_peaks
 from auxiliary_funcs import *
 from old_bondcheck import *
 from find_from_traj import finder
+from mechanalyzer.builder._names import functional_group_name
 
 #############################
 
@@ -305,7 +308,7 @@ def run_gsm(is_ssm,gsm_theory,path_to_log):
 ##################################
 
 
-def postproc(gsm_theory,path_to_log):
+def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
     # My postproc data structure is a dictionary
     # keys = "reactant = product"
     # values = case oneTS - mTSs -> read stringfile directly to get this info
@@ -315,38 +318,114 @@ def postproc(gsm_theory,path_to_log):
     #           list of geometries for reaction path
 
     postproc_dct = {}
+    rxns = read_pickle("rxns")
 
-    os.chdir('GSM_FOLDS')
-    gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
-    gsm_folds.sort()
+    geos = read_pickle("geos")
+    geo_dct = {}
+    for i, geo in enumerate(geos):
+        geo_dct[f'species_{i}'] = geo
 
+    wells = read_pickle("wells")
+    name_dct = {} # dct of species names
+    for well, gras in wells.items():
+        name_dct[well] = ' + '.join([functional_group_name(
+                         automol.graph.inchi(gra)) for gra in gras])
+    name_dct2 = {} # dct of smiles
+    for well, gras in wells.items():
+        name_dct2[well] = ' + '.join([automol.chi.smiles(
+                           automol.graph.chi(automol.graph.implicit(gra))) for gra in gras])
+
+    with open('reactions.csv', 'r') as f:
+        gsm_paths = f.read()
+    gsm_paths = [gsm_path.replace(' ','').split(','
+                ) for gsm_path in gsm_paths.splitlines()]
+    print(gsm_paths[:2])
+
+    #os.chdir('GSM_FOLDS')
+    gsm_folds = [el for el in os.listdir('GSM_FOLDS') if 'gsm_fold' in el]
     pattern = re.compile(r'(\d+)')
 
-    for fold in gsm_folds:
-        if os.listdir(f'{fold}/scratch/') is not []:
-            os.chdir(fold)
-            print(f"In folder {fold}, Now running postproc operations...")
-            write_log(f"In folder {fold}, Now running postproc operations...",path_to_log)
+    # If no indication of reacs or prods, consider all of them
+    if -1 in reacs_set:
+        reacs_set = set(wells.keys())
+    if -1 in prods_set:
+        prods_set = set(wells.keys())
 
-            inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
-            for inp in inputss:
-                match = pattern.search(inp)
-                if match:
-                    number = int(match.group())  # Convert to int to remove leading zeros
-                gsm_num = str(number+1).zfill(4)
-                print(f'Looking at gsm num {gsm_num} in {fold}')
-                write_log(f'Looking at gsm num {gsm_num} in {fold}',path_to_log)
-                if f"tsq{gsm_num}.xyz" in os.listdir(f'scratch/'):
-                    write_log(f"ts file found",path_to_log)
-                    print(f"ts file found")
+    edge_lst = []
+    edge_ene_lst = []
+    for rxn_string, rxn_info in rxns.items():
+        rname, pname = rxn_string.replace(' ','').split('=')
+        if rname not in reacs_set:
+            continue
+        if pname not in prods_set:
+            continue
+
+        prnt_str = ' + '.join(
+            automol.chi.smiles(automol.graph.chi(gra)) 
+            for gra in wells[rname])
+        prnt_str += ' = '
+        prnt_str += ' + '.join(
+            automol.chi.smiles(automol.graph.chi(gra)) 
+            for gra in wells[pname])
+        # Go through gsm_folds and find single step reactions
+        for path in gsm_paths:
+            if path[0] == rname and path[1] == pname:
+                print(os.path.join(path[2], f'stringfile.xyz{path[3]}'))
+                if f'stringfile.xyz{path[3]}' not in os.listdir(path[2]):
+                    print("strinfile does not exist, moving on")
+                    continue
+                with open(os.path.join(path[2], f'stringfile.xyz{path[3]}'), 'r') as f:
+                    traj_str = f.read()
+                traj = automol.geom.from_xyz_trajectory_string(traj_str)
+
+                enes = [float(energy) for _,energy in traj]
+                ene_max_idx = enes.index(max(enes))
+                ene_max_idxs, _ = find_peaks(enes, height=0.3)
+                print(enes)
+                print(ene_max_idxs)
+
+                if len(ene_max_idxs) < 2:
+                    print(prnt_str)
+                    ts_geo, ene_max = traj[ene_max_idx]
+                    print(ene_max)
+                    edge_lst.append((rname, pname))
+                    edge_ene_lst.append(float(ene_max))
+                    postproc_dct[f'{rname}+{pname}'] = (prnt_str,ts_geo,ene_max,traj)
                 else:
-                    write_log(f"ts NOT FOUND, skipping",path_to_log)
-                    print(f"ts NOT FOUND, skipping ")
+                    print('not concerted!', prnt_str) 
+    write_pickle(postproc_dct,"postproc")
+    write_pickle(edge_lst,"edge_lst")
+    write_pickle(edge_ene_lst,"edge_ene_lst")
 
-            os.chdir('..')
+    # for fold in gsm_folds:
+    #     fold_split = fold.split('_')
+    #     if int(fold_split[1]) in species_set:
+    #         print(fold)
+    # exit()
+    #     if os.listdir(f'{fold}/scratch/') is not []:
+    #         os.chdir(fold)
+    #         print(f"In folder {fold}, Now running postproc operations...")
+    #         write_log(f"In folder {fold}, Now running postproc operations...",path_to_log)
 
-        else: 
-            write_log(f'{fold} empty folder',path_to_log)
+    #         inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
+    #         for inp in inputss:
+    #             match = pattern.search(inp)
+    #             if match:
+    #                 number = int(match.group())  # Convert to int to remove leading zeros
+    #             gsm_num = str(number+1).zfill(4)
+    #             print(f'Looking at gsm num {gsm_num} in {fold}')
+    #             write_log(f'Looking at gsm num {gsm_num} in {fold}',path_to_log)
+    #             if f"tsq{gsm_num}.xyz" in os.listdir(f'scratch/'):
+    #                 write_log(f"ts file found",path_to_log)
+    #                 print(f"ts file found")
+    #             else:
+    #                 write_log(f"ts NOT FOUND, skipping",path_to_log)
+    #                 print(f"ts NOT FOUND, skipping ")
+
+    #         os.chdir('..')
+
+    #     else: 
+    #         write_log(f'{fold} empty folder',path_to_log)
 
 ##################################
 
@@ -393,6 +472,13 @@ Possible commands are:
     spin = config['spin']
     gsm_theory = config['gsm_theory']
     assert gsm_theory in ['g16','xtb'], "xtb or g16 directives required for GSM"
+    reacs_set, prods_set = set([-1]), set([-1])
+    if "reacs" in config:
+        if config["reacs"] is not "-1":
+            reacs_set = species_parser("reacs",config)
+    if "prods" in config:
+        if config["prods"] is not "-1":
+            prods_set = species_parser("prods",config)
 
     open('logfile.out','w').close() # Create logfile
     path_to_log = os.getcwd()+'/'
@@ -420,7 +506,7 @@ Possible commands are:
     elif command == 'runssm':
         run_gsm(True,gsm_theory,path_to_log)
     elif command == 'postproc':
-        postproc(gsm_theory,path_to_log)
+        postproc(gsm_theory,reacs_set,prods_set,path_to_log)
 
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
