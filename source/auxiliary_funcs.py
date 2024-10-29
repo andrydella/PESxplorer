@@ -203,6 +203,17 @@ def process_ensemble_file(filename):
     with open(f"{filename}","w") as f:
         f.writelines(new_file_lines)
 
+# o. Parse reacs and prods from input.dat
+def species_parser(name,config):
+    species_set = []
+    for part in config[name].split(','):
+        if '-' in part:  # Handle ranges like "1-4"
+            start, end = map(int, part.split('-'))
+            species_set.extend([f"species_{i}" for i in range(start, end + 1)])
+        else:  # Handle single values like "1"
+            species_set.append(f"species_{int(part)}")
+    return set(species_set)
+
 
 
 if __name__ == "__main__":
