@@ -1,11 +1,11 @@
 # Automatic exploration of a general PES from CREST metadynamics or MSREACT workflow output
-# 09 Sett 24
-# Andrea Della Libera
+# 28 Ott 24
+# Andrea Della Libera & Sarah N. Elliott
 
 # IN PROGRESS: #
-# 1. use automol.find for selpaths (handshake)
-# 2. use info on form and break bonds to setup fallback with SSM
 # 1. postprocess GSM (and eventually call fallback, and postprocess again)
+# 2. Use EStokTP grid search for TS finding as fallback to GSM
+# 3. Setup EStokTP and AMech workind dirs
 
 # TO DO: #
 # 1. Interface MOLGEN output
@@ -15,6 +15,7 @@
 import os
 import sys
 import subprocess
+import re
 #import csv
 from copy import deepcopy
 from auxiliary_funcs import *
@@ -52,7 +53,8 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
-            command = 'crest crestopt.xyz --cregen INPUT --ewin 10000. --notopo --T 30 &> ensemble.out'
+            os.system(f"cat crestopt.xyz >> {crest_out_name}")
+            command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo --T 30 &> ensemble.out'
             command = command.replace('INPUT',f'{filename}')
             outfile = 'crest_ensemble.xyz'
         elif calc_type == 'sp':
@@ -72,8 +74,8 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             p.wait()
 
     os.system(f"cp {crest_dir}/{outfile} .") 
-    if 'sp' not in calcs:
-        os.system(f"cat {crest_dir}/crestopt.xyz >> {outfile}") 
+    # if 'sp' not in calcs:
+    #     os.system(f"cat {crest_dir}/crestopt.xyz >> {outfile}") 
 
     return
 
@@ -113,7 +115,7 @@ def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):
 
 # 1. Unite metadynamics results in one single text file and create list of isomers
 #    Names of md folders should all have the same root name
-def unite_xyz(md_path,md_name):
+def unite_xyz(md_path,md_name): # COmputes high enes for bimoleculars as they are considered together
     # isomers = []
     # n_isom = 0
     # filename = 'crest_products.xyz' # Output file CREST MD
@@ -292,7 +294,53 @@ def run_gsm(is_ssm,gsm_theory,path_to_log):
                         p.communicate()  
                         p.wait()
                 else:
-                    write_log(f"ts FOUND, skipping {what_am_i}",path_to_log)
+                    write_log(f"ts NOT FOUND, skipping {what_am_i}",path_to_log)
+
+            os.chdir('..')
+
+        else: 
+            write_log(f'{fold} empty folder',path_to_log)
+
+##################################
+
+
+def postproc(gsm_theory,path_to_log):
+    # My postproc data structure is a dictionary
+    # keys = "reactant = product"
+    # values = case oneTS - mTSs -> read stringfile directly to get this info
+    #           list of TS enes
+    #           list of TS geos
+    #           energy reaction path
+    #           list of geometries for reaction path
+
+    postproc_dct = {}
+
+    os.chdir('GSM_FOLDS')
+    gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
+    gsm_folds.sort()
+
+    pattern = re.compile(r'(\d+)')
+
+    for fold in gsm_folds:
+        if os.listdir(f'{fold}/scratch/') is not []:
+            os.chdir(fold)
+            print(f"In folder {fold}, Now running postproc operations...")
+            write_log(f"In folder {fold}, Now running postproc operations...",path_to_log)
+
+            inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
+            for inp in inputss:
+                match = pattern.search(inp)
+                if match:
+                    number = int(match.group())  # Convert to int to remove leading zeros
+                gsm_num = str(number+1).zfill(4)
+                print(f'Looking at gsm num {gsm_num} in {fold}')
+                write_log(f'Looking at gsm num {gsm_num} in {fold}',path_to_log)
+                if f"tsq{gsm_num}.xyz" in os.listdir(f'scratch/'):
+                    write_log(f"ts file found",path_to_log)
+                    print(f"ts file found")
+                else:
+                    write_log(f"ts NOT FOUND, skipping",path_to_log)
+                    print(f"ts NOT FOUND, skipping ")
 
             os.chdir('..')
 
@@ -314,9 +362,10 @@ Possible commands are:
 - setup -> sets up GSM folders for each isomer
 - rungsm -> runs all GSM calcs
 - runssm -> runs SSM calculations as fallback
+- postproc -> runs postprocess on GSM_FOLDS
 '''
  #   commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
-    commands = ["runcrest","unite","selpaths","setup","rungsm","runssm"]
+    commands = ["runcrest","unite","selpaths","setup","rungsm","runssm","postproc"]
     if len(sys.argv) != 2:
         print(message)
         exit()
@@ -368,6 +417,9 @@ Possible commands are:
         run_gsm(False,gsm_theory,path_to_log)
     elif command == 'runssm':
         run_gsm(True,gsm_theory,path_to_log)
+    elif command == 'postproc':
+        postproc(gsm_theory,path_to_log)
+
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
 # # #### 1 ###
