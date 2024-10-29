@@ -1,4 +1,5 @@
 from itertools import permutations
+import os
 import pickle
 import csv
 import automol
@@ -171,3 +172,38 @@ def write_pickle(data,name):
 def read_pickle(name):
     with open(name + '.pickle', 'rb') as f:
         return pickle.load(f)
+
+# n.
+def process_ensemble_file(filename):
+    os.system(f'cp {filename} original_{filename}')
+
+    with open(f'original_{filename}', 'r') as file:
+        new_file_lines = []
+        while True:
+
+            int_line = file.readline().strip()
+            if not int_line:
+                break  # End of file
+            new_file_lines.append(int_line+'\n')
+
+            if int_line.isdigit(): # Check if the line contains an integer
+                num_useless_lines = int(int_line)
+            else:
+                break
+
+            float_line = file.readline().strip().split()[0]
+            float_value = float(float_line)
+            if float_value > 0:
+                float_value = -float_value
+            new_file_lines.append(str(float_value)+'\n')
+
+            for _ in range(num_useless_lines):
+                new_file_lines.append(file.readline().strip()+'\n')
+
+    with open(f"{filename}","w") as f:
+        f.writelines(new_file_lines)
+
+
+
+if __name__ == "__main__":
+    process_ensemble_file("crest_msreact_products.xyz")

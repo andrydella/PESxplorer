@@ -26,7 +26,7 @@ from find_from_traj import finder
 
 # Functions
 #0. Setup CREST calculation
-def crest_calc(filename,crest_out_name,calcs,charge,spin):
+def crest_calc(filename,crest_out_name,calcs,charge,spin,path_to_log):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
     dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
@@ -53,6 +53,8 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin):
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
+            write_log(f"Pre processing the CREST ensemble file {outfile}",path_to_log)
+            process_ensemble_file(crest_out_name)
             os.system(f"cat crestopt.xyz >> {crest_out_name}")
             command = 'crest crestopt.xyz --cregen INPUT --ewin 50. --notopo --T 30 &> ensemble.out'
             command = command.replace('INPUT',f'{filename}')
@@ -125,7 +127,6 @@ def unite_xyz(md_path,md_name): # COmputes high enes for bimoleculars as they ar
     with open("allcrestprods_unite.xyz",'r') as f:
         lines = [line.strip() for line in f.readlines()]
     n_atoms = int(lines[0])
-    # Write logfile here
     write_log(f"Crest output was found in {md_path}{md_name}\n")
     write_log(f'n atoms: {n_atoms}')
     with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
@@ -402,10 +403,11 @@ Possible commands are:
 
 # #### 1 ###
     if command == 'runcrest':
-        crest_calc('input-stru.xyz', crest_out_name, ['opt','msreact','ensemble'],charge,spin)
+        crest_calc('input-stru.xyz', crest_out_name, ['opt','msreact','ensemble'],charge,spin,path_to_log)
     elif command == 'unite':
         unite_xyz(crest_md_path,crest_out_name) # -> allcrestprods_unite.xyz
-        sort_xyz('allcrestprods_unite.xyz','crest_ensemble.xyz',charge,spin) # -> allcrestprods_sort.xyz
+#        sort_xyz('allcrestprods_unite.xyz','crest_ensemble.xyz',charge,spin) # -> allcrestprods_sort.xyz
+# Sort does not handle correclty bimol products
 # #### 2 ###
     elif command == 'selpaths':
         find_reactions()
