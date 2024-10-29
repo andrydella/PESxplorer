@@ -1,16 +1,13 @@
 # Automatic exploration of a general PES from CREST metadynamics or MSREACT workflow output
-# 28 Ott 24
+# 29 Ott 24
 # Andrea Della Libera & Sarah N. Elliott
 
 # IN PROGRESS: #
-# 1. postprocess GSM (and eventually call fallback, and postprocess again)
-# 2. Use EStokTP grid search for TS finding as fallback to GSM
-# 3. Setup EStokTP and AMech workind dirs
-# 4. COrreclty handle CREST output files
+# 1. Use EStokTP grid search for TS finding as fallback to GSM
+# 2. Setup AMech working dirs
 
 # TO DO: #
 # 1. Interface MOLGEN output
-# 2. Format better logfile
 
 # Modules import
 import os
@@ -317,7 +314,7 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
     #           energy reaction path
     #           list of geometries for reaction path
 
-    postproc_dct = {}
+    postproc_dct,not_concerted = {},{}
     rxns = read_pickle("rxns")
 
     geos = read_pickle("geos")
@@ -339,10 +336,8 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
         gsm_paths = f.read()
     gsm_paths = [gsm_path.replace(' ','').split(','
                 ) for gsm_path in gsm_paths.splitlines()]
-    print(gsm_paths[:2])
 
-    #os.chdir('GSM_FOLDS')
-    gsm_folds = [el for el in os.listdir('GSM_FOLDS') if 'gsm_fold' in el]
+    #gsm_folds = [el for el in os.listdir('GSM_FOLDS') if 'gsm_fold' in el]
     pattern = re.compile(r'(\d+)')
 
     # If no indication of reacs or prods, consider all of them
@@ -381,19 +376,21 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
                 enes = [float(energy) for _,energy in traj]
                 ene_max_idx = enes.index(max(enes))
                 ene_max_idxs, _ = find_peaks(enes, height=0.3)
-                print(enes)
-                print(ene_max_idxs)
+                is_bless = "TS"
+                if ene_max_idx in [0,len(enes)-1]:
+                    is_bless = "BLESS"
 
                 if len(ene_max_idxs) < 2:
-                    print(prnt_str)
                     ts_geo, ene_max = traj[ene_max_idx]
-                    print(ene_max)
                     edge_lst.append((rname, pname))
                     edge_ene_lst.append(float(ene_max))
-                    postproc_dct[f'{rname}+{pname}'] = (prnt_str,ts_geo,ene_max,traj)
+                    postproc_dct[f'{rname}+{pname}'] = (prnt_str,is_bless,ts_geo,ene_max,traj)
                 else:
-                    print('not concerted!', prnt_str) 
+                    print('not concerted!', prnt_str)
+                    not_concerted[f'{rname}+{pname}'] = (prnt_str,is_bless,traj)
+
     write_pickle(postproc_dct,"postproc")
+    write_pickle(not_concerted,"not_concerted")
     write_pickle(edge_lst,"edge_lst")
     write_pickle(edge_ene_lst,"edge_ene_lst")
 

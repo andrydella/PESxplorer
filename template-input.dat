@@ -17,6 +17,6 @@ gsm_theory = xtb
 charge = 0
 spin = 0
 
-# Species for rungGSM and postprocessing
+# Species for (rungGSM) and postprocessing
 reacs = 1
 prods = -1
