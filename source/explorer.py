@@ -1,10 +1,11 @@
 # Automatic exploration of a general PES from CREST metadynamics or MSREACT workflow output
-# 29 Ott 24
+# 30 Ott 24
 # Andrea Della Libera & Sarah N. Elliott
 
 # IN PROGRESS: #
 # 1. Use EStokTP grid search for TS finding as fallback to GSM
 # 2. Setup AMech working dirs
+# 3. Identify also minima with findpeaks(-x) to separate multistep rxns in el. steps
 
 # TO DO: #
 # 1. Interface MOLGEN output
