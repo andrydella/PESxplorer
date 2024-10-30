@@ -1,7 +1,7 @@
 model_gsm = /PATH/TO/GSM/MODEL/DATA/FOLDER/*
 
 # 3.0 is threshold for chooising how to collect CREST output
-# Other versions are deprecated at the moment
+# Other versions are deprecated at the moment. Don't change this
 crest_version = '3.0'
 
 # Folder (in main working dir) containin output files (if version >= 3.0)
@@ -9,14 +9,18 @@ crest_md_path = crest_calcs_1
 
 # Name of the output file (if version >= 3.0)
 crest_out_name = crest_msreact_products.xyz
+# isomers.xyz for isomerizations only
 
-#GSM level of theory
+#GSM level of theory [xtb or g16]
 gsm_theory = xtb
 
-# Charge and spin (molpro style)
+# Charge and spin (number of unpaired electrons)
 charge = 0
 spin = 0
 
-# Species for (rungGSM) and postprocessing
+# Species for postprocessing and (TO DO -> also for rungGSM)
 reacs = 1
 prods = -1
+
+# CREST ensemble energy window
+confs_window = 50.

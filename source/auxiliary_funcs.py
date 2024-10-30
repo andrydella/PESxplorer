@@ -3,6 +3,7 @@ import os
 import pickle
 import csv
 import automol
+from mechanalyzer.builder._names import functional_group_name
 
 # Auxilliary functions (| in the comments means 'or')
 # a. write xyz from list in the form [natom,energy|empty,coords1,...,coordsn]
@@ -174,10 +175,10 @@ def read_pickle(name):
         return pickle.load(f)
 
 # n.
-def process_ensemble_file(filename):
-    os.system(f'cp {filename} original_{filename}')
+def process_ensemble_file(filename,crest_dir):
+    os.system(f'cp {crest_dir}/{filename} {crest_dir}/original_{filename}')
 
-    with open(f'original_{filename}', 'r') as file:
+    with open(f'{crest_dir}/original_{filename}', 'r') as file:
         new_file_lines = []
         while True:
 
@@ -200,11 +201,11 @@ def process_ensemble_file(filename):
             for _ in range(num_useless_lines):
                 new_file_lines.append(file.readline().strip()+'\n')
 
-    with open(f"{filename}","w") as f:
+    with open(f"{crest_dir}/{filename}","w") as f:
         f.writelines(new_file_lines)
 
 # o. Parse reacs and prods from input.dat
-def species_parser(name,config):
+def species_parser(name, config):
     species_set = []
     for part in config[name].split(','):
         if '-' in part:  # Handle ranges like "1-4"
@@ -214,6 +215,38 @@ def species_parser(name,config):
             species_set.append(f"species_{int(part)}")
     return set(species_set)
 
+#p. Get information from the pickle files
+def setup_from_pickles(reacs_set, prods_set):
+
+    rxns = read_pickle("rxns")
+
+    geos = read_pickle("geos")
+    geo_dct = {}
+    for i, geo in enumerate(geos):
+        geo_dct[f'species_{i}'] = geo
+
+    wells = read_pickle("wells")
+    name_dct = {} # dct of species names
+    for well, gras in wells.items():
+        name_dct[well] = ' + '.join([functional_group_name(
+                         automol.graph.inchi(gra)) for gra in gras])
+    name_dct2 = {} # dct of smiles
+    for well, gras in wells.items():
+        name_dct2[well] = ' + '.join([automol.chi.smiles(
+                           automol.graph.chi(automol.graph.implicit(gra))) for gra in gras])
+
+    with open('reactions.csv', 'r') as f:
+        gsm_paths = f.read()
+    gsm_paths = [gsm_path.replace(' ','').split(','
+                ) for gsm_path in gsm_paths.splitlines()]
+
+    # If no indication of reacs or prods, consider all of them
+    if -1 in reacs_set:
+        reacs_set = set(wells.keys())
+    if -1 in prods_set:
+        prods_set = set(wells.keys())
+
+    return rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set
 
 
 if __name__ == "__main__":
