@@ -261,10 +261,9 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
     # os.chdir('GSM_FOLDS')
     # gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     # gsm_folds.sort()
+    what_am_i = 'GSM'
     if is_ssm:
         what_am_i = 'SSM'
-    else:
-        what_am_i = 'GSM'
     rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set = setup_from_pickles(reacs_set, prods_set)
     # for fold in gsm_folds:
     for rxn_string, rxn_info in rxns.items():
@@ -381,8 +380,8 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
 
     with open(f"{gsm_theory}-gsm-output.csv","w") as f:
         for key,value in postproc_dct.items():
-            stuff = map(str,value[:3]).join('\t')
-            f.write(f"{key}\t{stuff}")
+            stuff = ('\t').join(list(map(str,value[:3])))
+            f.write(f"{key}\t{stuff}\n")
 
     # gsm_folds = [el for el in os.listdir('GSM_FOLDS') if 'gsm_fold' in el]
     # pattern = re.compile(r'(\d+)')
