@@ -6,6 +6,7 @@
 # 1. Use EStokTP grid search for TS finding as fallback to GSM
 # 2. Setup AMech working dirs
 # 3. Identify also minima with findpeaks(-x) to separate multistep rxns in el. steps
+# 4. for Single ended, need to check the product connectivity
 
 # TO DO: #
 # 1. Interface MOLGEN output
@@ -26,7 +27,7 @@ from find_from_traj import finder
 
 # Functions
 #0. Setup CREST calculation
-def crest_calc(filename,crest_out_name,calcs,charge,spin,enewin,path_to_log):
+def crest_calc(filename,crest_out_name,calcs,charge,spin,enewin,path_to_log,log_name):
     # Setup crest subfolder
     crest_dir_prefix = "crest_calc"
     dirs_lst = [dir for dir in os.listdir() if crest_dir_prefix in dir]
@@ -37,7 +38,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin,enewin,path_to_log):
             folder_nums.append(int(direc.split("_")[2])) 
         crest_dir = f"{crest_dir_prefix}_{max(folder_nums) + 1}"
     os.system(f"mkdir -p {crest_dir}") 
-    write_log(f"\n####\nWorking in {crest_dir}\n####\n")
+    write_log(f"\n####\nWorking in {crest_dir}\n####\n",log_name)
 
     os.system(f'cp {filename} {crest_dir}')
     os.system(f'echo {charge} > {crest_dir}/.CHRG')
@@ -53,7 +54,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin,enewin,path_to_log):
             command = command.replace('INPUT',f'{filename}')
             outfile = crest_out_name
         elif calc_type == 'ensemble':
-            write_log(f"Pre processing the CREST ensemble file {outfile}",path_to_log)
+            write_log(f"Pre processing the CREST ensemble file {outfile}",log_name,path_to_log)
             process_ensemble_file(crest_out_name,crest_dir)
             os.system(f"cat {crest_dir}/crestopt.xyz >> {crest_dir}/{crest_out_name}")
             command = 'crest crestopt.xyz --cregen INPUT --ewin ENEWIN --notopo --T 30 &> ensemble.out'
@@ -71,7 +72,7 @@ def crest_calc(filename,crest_out_name,calcs,charge,spin,enewin,path_to_log):
                     {command}
                     '''
         filename = outfile
-        write_log(f"Command is: {command}\nOutput is: {outfile}\n")
+        write_log(f"Command is: {command}\nOutput is: {outfile}\n",log_name)
         with subprocess.Popen(crest_run, stdout=subprocess.PIPE, shell=True) as p:
             p.communicate()
             p.wait()
@@ -94,12 +95,12 @@ def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):
         lines = [line.strip() for line in f.readlines()]
     n_atoms = int(lines[0])
     # Write logfile here
-    write_log(xyz_folder+xyz_list[0])
-    write_log(f'n atoms: {n_atoms}')
+    write_log(xyz_folder+xyz_list[0],log_name)
+    write_log(f'n atoms: {n_atoms}',log_name)
     with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
     for xyzfil in xyz_list:
-        write_log('Working on: '+xyzfil)
+        write_log('Working on: '+xyzfil,log_name)
         with open(xyz_folder+xyzfil,'r') as f:
             lines = [line.strip() for line in f.readlines()]
         for i,line in enumerate(lines):
@@ -108,7 +109,7 @@ def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):
                 if n_at == n_atoms:
                     isomers.append([li for li in lines[i:i+n_atoms+2]])
                     n_isom += 1
-                    write_log('New isomer! n isom '+str(n_isom))
+                    write_log('New isomer! n isom '+str(n_isom),log_name)
                 else:
                     pass
             except:
@@ -118,7 +119,7 @@ def unite_molgen_xyz(xyz_folder,suffix="opt.xyz"):
 
 # 1. Unite metadynamics results in one single text file and create list of isomers
 #    Names of md folders should all have the same root name
-def unite_xyz(md_path,md_name): # COmputes high enes for bimoleculars as they are considered together
+def unite_xyz(md_path,md_name,log_name): # COmputes high enes for bimoleculars as they are considered together
     # isomers = []
     # n_isom = 0
     # filename = 'crest_products.xyz' # Output file CREST MD
@@ -128,8 +129,8 @@ def unite_xyz(md_path,md_name): # COmputes high enes for bimoleculars as they ar
     with open("allcrestprods_unite.xyz",'r') as f:
         lines = [line.strip() for line in f.readlines()]
     n_atoms = int(lines[0])
-    write_log(f"Crest output was found in {md_path}{md_name}\n")
-    write_log(f'n atoms: {n_atoms}')
+    write_log(f"Crest output was found in {md_path}{md_name}\n",log_name)
+    write_log(f'n atoms: {n_atoms}',log_name)
     with open('natoms_unite.txt','w') as f: f.write(str(n_atoms))
 
     # else:
@@ -184,16 +185,16 @@ def sort_xyz(filinp,crest_out_name,charge,spin):
 
 
 # 3. Use find.py to get possible reactions
-def find_reactions():
+def find_reactions(log_name):
     geos,well_dct,reac_dct = finder(os.getcwd())
     write_pickle(geos,"geos")
     write_pickle(well_dct,"wells")
     write_pickle(reac_dct,"rxns")
-    write_log(f"Number of species considered: {len(geos)}")
-    write_log(f"Number of reactions found: {len(reac_dct.keys())}")
+    write_log(f"Number of species considered: {len(geos)}",log_name)
+    write_log(f"Number of reactions found: {len(reac_dct.keys())}",log_name)
 
 # 4. Convert data structures and setup GSM calculations
-def setup_gsm(filinp,model_gsm,spin,charge):
+def setup_gsm(filinp,model_gsm,spin,charge,log_name):
     import automol
 
     # geos,well_dct,reac_dct = amech_data_structure(filinp)
@@ -218,9 +219,9 @@ def setup_gsm(filinp,model_gsm,spin,charge):
 
         geo_p = swap_atoms(atom_order,geo_p)
 
-        write_log(f"Working on reaction {reac_prod}")
+        write_log(f"Working on reaction {reac_prod}",log_name)
         fold_name = f'GSM_FOLDS/{reac_prod[0]}_gsm_fold'
-        write_log(f"Making folder {fold_name}")
+        write_log(f"Making folder {fold_name}",log_name)
         if not os.path.exists(fold_name): 
             os.mkdir(fold_name)
         if not os.path.exists(f'{fold_name}/scratch'): 
@@ -232,7 +233,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
         # Write initial file for each gsm calculation
         gsm_counters[reac_prod[0]] += 1
         gsm_num = str(gsm_counters[reac_prod[0]]).zfill(4)
-        write_log(f"Current counter for reactions of {reac_prod[0]}: {gsm_num}")
+        write_log(f"Current counter for reactions of {reac_prod[0]}: {gsm_num}",log_name)
         initial_str = automol.geom.xyz_trajectory_string([geo_r,geo_p])
         with open(f'{gsm_path}/scratch/initial{gsm_num}.xyz', 'w') as f:
             f.write(initial_str)
@@ -257,7 +258,7 @@ def setup_gsm(filinp,model_gsm,spin,charge):
             f.write(f"{reac_prod[0]}, {reac_prod[1]}, {fold_name}, {gsm_num}\n")
 
 # 5. run_gsm()
-def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
+def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log,log_name):
     # os.chdir('GSM_FOLDS')
     # gsm_folds = [el for el in os.listdir() if 'gsm_fold' in el]
     # gsm_folds.sort()
@@ -285,13 +286,13 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
         maindir = os.getcwd()
         for path in gsm_paths:
             if path[0] == rname and path[1] == pname:
-                write_log(os.path.join(path[2], f'initial{path[3]}.xyz'),path_to_log)
+                write_log(os.path.join(path[2], f'initial{path[3]}.xyz'),log_name,path_to_log)
                 if f'initial{path[3]}.xyz' not in os.listdir(path[2]):
-                    write_log("initial file does not exist, moving on",path_to_log)
+                    write_log("initial file does not exist, moving on",log_name,path_to_log)
                     continue
         # if os.listdir(f'{fold}/scratch/') is not []:
                 os.chdir(path[2])
-                write_log(f"In folder {path[2]}, is ssm on? {is_ssm}",path_to_log)
+                write_log(f"In folder {path[2]}, is ssm on? {is_ssm}",log_name,path_to_log)
 
                 os.system("cp inpfileq.gsm inpfileq")
                 if is_ssm:
@@ -302,9 +303,9 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
                 gsm_int = int(path[3])
                 inputss = f'initial{gsm_num}.xyz'
                 # gsm_num = str(i+1).zfill(4)
-                write_log(f'Running gsm.{gsm_theory} {gsm_num} in {path[2]}',path_to_log)
+                write_log(f'Running gsm.{gsm_theory} {gsm_num} in {path[2]}',log_name,path_to_log)
                 if f"stringfile.xyz{gsm_num}" not in os.listdir():
-                    write_log(f"ts file NOT found, running {what_am_i} now",path_to_log)
+                    write_log(f"ts file NOT found, running {what_am_i} now",log_name,path_to_log)
                     if gsm_theory == 'xtb':
                         command = f"./gsm.orca {gsm_int} 10 &> out{gsm_num}.log"
                     else:
@@ -314,7 +315,7 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
                         p.communicate()  
                         p.wait()
                 else:
-                    write_log(f"Stringfile FOUND, skipping {what_am_i}",path_to_log)
+                    write_log(f"Stringfile FOUND, skipping {what_am_i}",log_name,path_to_log)
 
                 os.chdir(maindir)
 
@@ -324,9 +325,10 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log):
 ##################################
 
 
-def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
+def postproc(gsm_theory,reacs_set,prods_set,path_to_log,log_name):
     # My postproc data structure is a dictionary
     postproc_dct,not_concerted = {},{}
+    failed_gsm = []
 
     rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set = setup_from_pickles(reacs_set, prods_set)
 
@@ -349,9 +351,9 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
         # Go through gsm_folds and find single step reactions
         for path in gsm_paths:
             if path[0] == rname and path[1] == pname:
-                print(os.path.join(path[2], f'stringfile.xyz{path[3]}'))
                 if f'stringfile.xyz{path[3]}' not in os.listdir(path[2]):
-                    print("strinfile does not exist, moving on")
+                    write_log(f"{path[2]}/stringfile.xyz{path[3]} does not exist",log_name)
+                    failed_gsm.append(os.path.join(path[2], f'stringfile.xyz{path[3]}'))
                     continue
                 with open(os.path.join(path[2], f'stringfile.xyz{path[3]}'), 'r') as f:
                     traj_str = f.read()
@@ -370,50 +372,20 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log):
                     edge_ene_lst.append(float(ene_max))
                     postproc_dct[f'{rname}+{pname}'] = (prnt_str,is_bless,ene_max,ts_geo,traj)
                 else:
-                    print('not concerted!', prnt_str)
+                    write_log(f'not concerted! {prnt_str}',log_name)
                     not_concerted[f'{rname}+{pname}'] = (prnt_str,is_bless,traj)
 
     write_pickle(postproc_dct,"postproc")
     write_pickle(not_concerted,"not_concerted")
     write_pickle(edge_lst,"edge_lst")
     write_pickle(edge_ene_lst,"edge_ene_lst")
+    write_pickle(failed_gsm,"failed_paths")
 
     with open(f"{gsm_theory}-gsm-output.csv","w") as f:
         for key,value in postproc_dct.items():
             stuff = ('\t').join(list(map(str,value[:3])))
             f.write(f"{key}\t{stuff}\n")
 
-    # gsm_folds = [el for el in os.listdir('GSM_FOLDS') if 'gsm_fold' in el]
-    # pattern = re.compile(r'(\d+)')
-    # for fold in gsm_folds:
-    #     fold_split = fold.split('_')
-    #     if int(fold_split[1]) in species_set:
-    #         print(fold)
-    # exit()
-    #     if os.listdir(f'{fold}/scratch/') is not []:
-    #         os.chdir(fold)
-    #         print(f"In folder {fold}, Now running postproc operations...")
-    #         write_log(f"In folder {fold}, Now running postproc operations...",path_to_log)
-
-    #         inputss = [el for el in os.listdir('scratch') if el.startswith('initial')]
-    #         for inp in inputss:
-    #             match = pattern.search(inp)
-    #             if match:
-    #                 number = int(match.group())  # Convert to int to remove leading zeros
-    #             gsm_num = str(number+1).zfill(4)
-    #             print(f'Looking at gsm num {gsm_num} in {fold}')
-    #             write_log(f'Looking at gsm num {gsm_num} in {fold}',path_to_log)
-    #             if f"tsq{gsm_num}.xyz" in os.listdir(f'scratch/'):
-    #                 write_log(f"ts file found",path_to_log)
-    #                 print(f"ts file found")
-    #             else:
-    #                 write_log(f"ts NOT FOUND, skipping",path_to_log)
-    #                 print(f"ts NOT FOUND, skipping ")
-
-    #         os.chdir('..')
-
-    #     else: 
-    #         write_log(f'{fold} empty folder',path_to_log)
 
 ##################################
 
@@ -469,19 +441,30 @@ Possible commands are:
             prods_set = species_parser("prods",config)
     enewin = config['confs_window']
 
-    open('logfile.out','w').close() # Create logfile
+
+    log_strings = [".log",command]
+    dirs_lst = [fil for fil in os.listdir() if all(x in fil for x in log_strings)]
+    fil_nums = []
+    if not dirs_lst: 
+        log_name = command + ".log_1"
+    else:
+        for direc in dirs_lst:
+            fil_nums.append(int(direc.split("_")[1])) 
+        log_name = f"{command}.log_{max(fil_nums) + 1}"
+    open(log_name,'w').close() # Create logfile
     path_to_log = os.getcwd()+'/'
-    write_log("Read the input file input.dat")
-    write_log(lines)
+    write_log("Read the input file input.dat",log_name)
+    # Write info on current run in decent way
+    write_log(lines,log_name)
 
     at_num = {'1':'H','6':'C','8':'O','7':'N'}
 
 
 # #### 1 ###
     if command == 'runcrest':
-        crest_calc('input-stru.xyz', crest_out_name, ['opt','msreact','ensemble'],charge,spin,enewin,path_to_log)
+        crest_calc('input-stru.xyz', crest_out_name, ['opt','msreact','ensemble'],charge,spin,enewin,path_to_log,log_name)
     #elif command == 'unite':
-        unite_xyz(crest_md_path,crest_out_name) # -> allcrestprods_unite.xyz
+        unite_xyz(crest_md_path,crest_out_name,log_name) # -> allcrestprods_unite.xyz
         os.system('cp allcrestprods_unite.xyz allcrestprods_sort.xyz')
 #        sort_xyz('allcrestprods_unite.xyz','crest_ensemble.xyz',charge,spin) # -> allcrestprods_sort.xyz
 # Sort does not handle correclty bimol products
@@ -490,14 +473,14 @@ Possible commands are:
         find_reactions()
 # #### 3 ###
     elif command == 'setup':
-        setup_gsm('allcrestprods_sort.xyz',model_gsm,spin,charge)
+        setup_gsm('allcrestprods_sort.xyz',model_gsm,spin,charge,log_name)
 # #### 4 ###
     elif command == 'rungsm':
-        run_gsm(False,gsm_theory,reacs_set,prods_set,path_to_log)
+        run_gsm(False,gsm_theory,reacs_set,prods_set,path_to_log,log_name)
     elif command == 'runssm':
-        run_gsm(True,gsm_theory,reacs_set,prods_set,path_to_log)
+        run_gsm(True,gsm_theory,reacs_set,prods_set,path_to_log,log_name)
     elif command == 'postproc':
-        postproc(gsm_theory,reacs_set,prods_set,path_to_log)
+        postproc(gsm_theory,reacs_set,prods_set,path_to_log,log_name)
 
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")
