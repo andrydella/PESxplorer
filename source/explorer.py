@@ -309,7 +309,7 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log,log_name):
                     if gsm_theory == 'xtb':
                         command = f"./gsm.orca {gsm_int} 10 &> out{gsm_num}.log"
                     else:
-                        command = f"gsm {gsm_int} 30 &> out{gsm_num}.log"
+                        command = f"gsm {gsm_int} 10 &> out{gsm_num}.log"
                     with subprocess.Popen(command, 
                                           stdout=subprocess.PIPE, shell=True) as p:
                         p.communicate()  
