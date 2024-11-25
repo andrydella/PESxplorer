@@ -265,7 +265,7 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log,log_name):
     what_am_i = 'GSM'
     if is_ssm:
         what_am_i = 'SSM'
-    rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set = setup_from_pickles(reacs_set, prods_set)
+    rxns,geos,geo_dct,wells,gsm_paths,reacs_set,prods_set = setup_from_pickles(reacs_set, prods_set)
     # for fold in gsm_folds:
     for rxn_string, rxn_info in rxns.items():
         rname, pname = rxn_string.replace(' ','').split('=')
@@ -323,34 +323,45 @@ def run_gsm(is_ssm,gsm_theory,reacs_set,prods_set,path_to_log,log_name):
         #     write_log(f'{fold} empty folder',path_to_log)
 
 ##################################
+def are_gras_same(gras, gras2):
+    ret = False
+    if len(gras) == 2 and len(gras2) == 2:
+        if automol.graph.isomorphic(gras[0], gras2[0]):
+            if automol.graph.isomorphic(gras[1], gras[1]):
+                ret = True
+        elif automol.graph.isomorphic(gras[0], gras2[1]):
+            if automol.graph.isomorphic(gras[1], gras2[0]):
+                ret = True 
+    elif len(gras) == 1 and len(gras2) == 1:
+        if automol.graph.isomorphic(gras[0], gras2[0]):
+                ret = True
+    return ret
 
 
 def postproc(gsm_theory,reacs_set,prods_set,path_to_log,log_name):
     # My postproc data structure is a dictionary
-    postproc_dct,not_concerted = {},{}
+    postproc_dct, not_concerted, not_found = {},{},{}
     failed_gsm = []
 
-    rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set = setup_from_pickles(reacs_set, prods_set)
+    (
+        rxns, geos, geo_dct,
+        wells, gsm_paths, reacs_set, prods_set
+    ) = setup_from_pickles(reacs_set, prods_set)
+    check_rxns = {key.replace(' ',''): value for key, value in rxns.items()}
 
     edge_lst = []
     edge_ene_lst = []
-    for rxn_string, rxn_info in rxns.items():
-        rname, pname = rxn_string.replace(' ','').split('=')
+    for rxn_string, rxn_info in check_rxns.items():
+        rname, pname = rxn_string.split('=')
         if rname not in reacs_set:
             continue
         if pname not in prods_set:
             continue
 
-        prnt_str = ' + '.join(
-            automol.chi.smiles(automol.graph.chi(gra)) 
-            for gra in wells[rname])
-        prnt_str += ' = '
-        prnt_str += ' + '.join(
-            automol.chi.smiles(automol.graph.chi(gra)) 
-            for gra in wells[pname])
         # Go through gsm_folds and find single step reactions
         for path in gsm_paths:
             if path[0] == rname and path[1] == pname:
+                # Read stringfile to find barrier geos and enes
                 if f'stringfile.xyz{path[3]}' not in os.listdir(path[2]):
                     write_log(f"{path[2]}/stringfile.xyz{path[3]} does not exist",log_name)
                     failed_gsm.append(os.path.join(path[2], f'stringfile.xyz{path[3]}'))
@@ -358,34 +369,307 @@ def postproc(gsm_theory,reacs_set,prods_set,path_to_log,log_name):
                 with open(os.path.join(path[2], f'stringfile.xyz{path[3]}'), 'r') as f:
                     traj_str = f.read()
                 traj = automol.geom.from_xyz_trajectory_string(traj_str)
-
-                enes = [float(energy) for _,energy in traj]
+                enes = [float(energy) for _, energy in traj]
                 ene_max_idx = enes.index(max(enes))
-                ene_max_idxs, _ = find_peaks(enes, height=0.3)
                 is_bless = "TS"
                 if ene_max_idx in [0,len(enes)-1]:
                     is_bless = "BLESS"
 
-                if len(ene_max_idxs) < 2:
-                    ts_geo, ene_max = traj[ene_max_idx]
-                    edge_lst.append((rname, pname))
-                    edge_ene_lst.append(float(ene_max))
-                    postproc_dct[f'{rname}+{pname}'] = (prnt_str,is_bless,ene_max,ts_geo,traj)
-                else:
-                    write_log(f'not concerted! {prnt_str}',log_name)
-                    not_concerted[f'{rname}+{pname}'] = (prnt_str,is_bless,traj)
+                # find well geos and enes (add first and last structure if not found)
+                ene_well_idxs, _ = find_peaks([-ene for ene in enes])
+                ene_well_idxs = list(ene_well_idxs)
+                if len(ene_well_idxs) < 1:
+                    ene_well_idxs.insert(0,0)
+                elif ene_well_idxs[0] != 0:
+                    ene_well_idxs.insert(0,0)
+                if ene_well_idxs[-1] != len(enes) - 1:
+                    ene_well_idxs.append(len(enes) - 1)
 
-    write_pickle(postproc_dct,"postproc")
-    write_pickle(not_concerted,"not_concerted")
-    write_pickle(edge_lst,"edge_lst")
-    write_pickle(edge_ene_lst,"edge_ene_lst")
-    write_pickle(failed_gsm,"failed_paths")
+                # Look at the path from each well
+                for well_num in range(len(ene_well_idxs)-1):
+                    # split the trajectory to only include the well's elementary channel
+                    elem_traj = traj[ene_well_idxs[well_num]:ene_well_idxs[well_num+1]+1]
+                    elem_enes = [float(energy) for _, energy in elem_traj]
+                    elem_ene_max_idx = elem_enes.index(max(elem_enes))
+                    # read the elementary barrier and well geometries and energies
+                    elem_ts_geo, elem_ene_max = elem_traj[elem_ene_max_idx]
+                    rgeo = elem_traj[0][0] 
+                    pgeo = elem_traj[-1][0]
+                    rgras = automol.graph.connected_components(automol.geom.graph(rgeo))
+                    pgras = automol.graph.connected_components(automol.geom.graph(pgeo))
+                    if are_gras_same(rgras, pgras):
+                        # this makes sure that the barrier between two wells is not 
+                        # simply a reorientation or conformational barrier between
+                        # two conformations of the same species
+                        continue
+
+                    # identify which species numbers from wells.pickle the wells correspond with
+                    rspc = None
+                    pspc = None
+                    for spc, gras in wells.items():
+                        if rspc is not None and pspc is not None:
+                            break
+                        if are_gras_same(gras, rgras):
+                            rspc = spc
+                        elif are_gras_same(gras, pgras):
+                            pspc = spc
+                    # if this elementary reaction was already found through
+                    # another trajectory we don't want to double add it
+                    if f'{rspc} = {pspc}' in rxns.keys():
+                        continue
+
+                    # add well if it was not a part of well.pickle
+                    if rspc is None:
+                        new_idx = 1 + max([int(key.split('_')[1]) for key in wells.keys()])
+                        rspc = f'species_{new_idx}' 
+                        wells[rspc] = rgras
+                        geo_dct[rspc] = rgeo
+                    if pspc is None:
+                        new_idx = 1 + max([int(key.split('_')[1]) for key in wells.keys()])
+                        pspc = f'species_{new_idx}' 
+                        wells[pspc] = pgras
+                        geo_dct[pspc] = pgeo
+
+                    # add reaction to rxn.pickle if it was not originally elementary
+                    if rspc != rname or pspc != pname:
+                        iso_dct, frm_bnd_lst, brk_bnd_lst = automol.reac.arbitrary_reactions(
+                            rgras, pgras)
+                        if iso_dct:
+                            rxns[rspc + ' = ' + pspc] = (iso_dct, frm_bnd_lst, brk_bnd_lst)
+                        else:
+                            print(f'elementary step for {rname}={pname} could not be identified')
+                            not_found[f'{rname}={pname}'] = len(ene_well_idxs)
+                            print(automol.geom.string(rgeo))                      
+                            print(automol.geom.string(pgeo))
+
+                    # human understandable reaction print
+                    prnt_str = ' + '.join(
+                        automol.chi.smiles(automol.graph.chi(gra)) 
+                            for gra in rgras)
+                    prnt_str += ' = '
+                    prnt_str += ' + '.join(
+                        automol.chi.smiles(automol.graph.chi(gra)) 
+                            for gra in pgras)
+                        
+                    # add elementary reaction to postprocess dictionary                
+                    edge_lst.append((rspc, pspc))
+                    edge_ene_lst.append(float(elem_ene_max))
+                    postproc_dct[f'{rname}={pname}'] = (
+                        prnt_str, is_bless,
+                        elem_ene_max, elem_ts_geo, elem_traj)
+                    
+                    write_pickle(postproc_dct,"postproc")
+                    # write_pickle(not_concerted,"not_concerted")
+                    write_pickle(not_found,"not_found")
+                    write_pickle(edge_lst,"edge_lst")
+                    write_pickle(edge_ene_lst,"edge_ene_lst")
+                    write_pickle(failed_gsm,"failed_paths")
+                    write_pickle(rxns, "pp_rxns")
+                    write_pickle(wells, "pp_wells")
+                    write_pickle(geo_dct, "pp_geos")
 
     with open(f"{gsm_theory}-gsm-output.csv","w") as f:
         for key,value in postproc_dct.items():
             stuff = ('\t').join(list(map(str,value[:3])))
             f.write(f"{key}\t{stuff}\n")
 
+
+def prepare_amech_therm(input_str, well_chg, log_name, fs_path, path='.'):
+
+    # get postprocessed info
+    (
+        _, well_geos, well_gra_dct, well_ene_dct, 
+        name_dct, postproc_dct
+    ) = setup_from_pp_pickles(path)
+    
+    # fill in info that automated_insert needs
+    insert_dct = INSERT_DCT
+    insert_dct['save_filesystem'] = f'{fs_path}/SAVE'
+    insert_dct['input_string'] = input_str
+    insert_dct['charge'] = well_chg
+    insert_dct['program'] = 'gaussian09'
+    insert_dct['method'] = 'b3lyp'
+    insert_dct['basis'] = 'sto-3g'
+    insert_dct['orb_res'] = 'RU'
+
+    # update species filesystem
+    save_wells = list(well_ene_dct.keys())
+    _, spc_csv_str = prepare_amech_spcdb(
+        save_wells, insert_dct, well_chg, well_geos, well_gra_dct,
+        well_ene_dct, name_dct, postproc_dct, log_name)
+    mech_str = "REACTIONS     CAL/MOLE     MOLES\nEND\n\n\n"
+
+    # set up amech input files
+    run_dat_str = read_template('automech_templates', 'run_thermo.dat')
+    theo_dat_str = read_template('automech_templates', 'theory.dat')
+    models_dat_str = read_template('automech_templates', 'models.dat')
+    spc_dat_str = read_template('automech_templates', 'species.dat')
+    run_dat_str = run_dat_str.replace('RUN_PREFIX', f'{fs_path}/RUN')
+    run_dat_str = run_dat_str.replace('SAVE_PREFIX', f'{fs_path}/SAVE')
+    run_dat_str = run_dat_str.replace('NUM_SPECIES', str(len(save_wells)))
+    write_log(spc_csv_str, 'species.csv', path_to_log=f"{path}/inp/", create=True)
+    write_log(mech_str, 'mechanism.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(run_dat_str, 'run.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(models_dat_str, 'models.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(theo_dat_str, 'theory.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(spc_dat_str, 'species.dat', path_to_log=f"{path}/inp/", create=True)
+
+
+def prepare_amech_kin(input_str, well_chg, well_spin, log_name, fs_path, path='.'):
+
+    # get postprocessed info
+    (
+        rxns, well_geos, well_gra_dct, well_ene_dct, 
+        name_dct, postproc_dct
+    ) = setup_from_pp_pickles(path)
+
+    # fill in info that automated_insert needs
+    insert_dct = INSERT_DCT
+    insert_dct['save_filesystem'] = f'{fs_path}/SAVE'
+    insert_dct['input_string'] = input_str
+    insert_dct['charge'] = well_chg
+    insert_dct['program'] = 'gaussian09'
+    insert_dct['method'] = 'b3lyp'
+    insert_dct['basis'] = 'sto-3g'
+    insert_dct['orb_res'] = 'RU'
+
+    # update species filesystem
+    reached_wells = [
+        well.replace(' ','') for wells in list(rxns.keys()) for well in wells.split('=')]
+    reached_wells = set(reached_wells)
+    well_info_dct, spc_csv_str = prepare_amech_spcdb(
+        insert_dct, reached_wells, well_chg, well_geos, well_gra_dct,
+        well_ene_dct, name_dct, log_name)
+    
+    # update reactions filesystem
+    insert_dct['ts_mult'] = well_spin + 1
+    insert_dct['saddle'] = True
+    mech_dat_str = prepare_amech_rxnsdb(
+        insert_dct, well_info_dct, rxns, well_gra_dct,
+        well_ene_dct, name_dct, postproc_dct, log_name)
+    
+    # set up amech input files
+    run_dat_str = read_template('automech_templates', 'run_rate.dat')
+    theo_dat_str = read_template('automech_templates', 'theory.dat')
+    models_dat_str = read_template('automech_templates', 'models.dat')
+    spc_dat_str = read_template('automech_templates', 'species.dat')
+    run_dat_str = run_dat_str.replace('RUN_PREFIX', f'{fs_path}/RUN')
+    run_dat_str = run_dat_str.replace('SAVE_PREFIX', f'{fs_path}/SAVE')
+    run_dat_str = run_dat_str.replace('NUM_CHANNELS', str(len(mech_dat_str.splitlines())-2))
+    write_log(spc_csv_str, 'species.csv', path_to_log=f"{path}/inp/", create=True)
+    write_log(mech_dat_str, 'mechanism.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(run_dat_str, 'run.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(models_dat_str, 'models.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(theo_dat_str, 'theory.dat', path_to_log=f"{path}/inp/", create=True)
+    write_log(spc_dat_str, 'species.dat', path_to_log=f"{path}/inp/", create=True)
+
+
+def prepare_amech_spcdb(
+        insert_dct, save_wells, well_chg, well_geos, well_gra_dct,
+        well_ene_dct, name_dct, log_name):
+
+    # hardwired script import until i finish setting up script as callable cli thing
+    current_dir = os.getcwd()
+    bin_path = os.path.join(current_dir, '/home/elliott/Packages/AutoMech/mechdriver/bin')
+    sys.path.insert(0, bin_path)
+    import automated_insert
+
+    well_info_dct = {}
+    spc_csv = 'name,inchi,mult,charge'
+    saved_chis = []
+
+    #  loop over species and add them to the amech filesystem
+    for well, ene in well_ene_dct.items():
+        if well not in save_wells:
+            write_log(f'not saving {well} because no rxn uses it', log_name)
+            continue
+        if well in well_info_dct:
+            well_info = well_info_dct[well]
+        else:
+            well_info = ()
+        for i, gra in enumerate(well_gra_dct[well]):
+            if len(well_info) < i + 1:
+                mults_allowed = automol.graph.possible_spin_multiplicities(gra)
+                well_mult = mults_allowed[0]
+                chi = automol.graph.chi(gra)
+                well_info += ((chi, well_chg, well_mult),)
+            well_mult = well_info[i][2]
+            chi = well_info[i][0]
+            if chi not in saved_chis:
+                insert_dct['mult'] = well_mult
+                insert_dct['inchi'] = chi
+                insert_dct['output_string'] = automol.geom.xyz_string(
+                    automol.geom.subgeom(well_geos[well], automol.graph.atom_keys(gra)),
+                    f'{ene/len(well_gra_dct[well]):.8f}')
+                automated_insert.main(insert_dct)
+                name = name_dct[well].split('+')[i].replace(' ','')
+                spc_csv += f"\n{name},'{automol.graph.chi(gra)}',{str(well_mult)},{str(well_chg)} ! {well}"
+                saved_chis.append(chi)
+            well_info_dct[well] = well_info
+    return well_info_dct, spc_csv
+
+
+def prepare_amech_rxnsdb(
+        insert_dct, well_info_dct, rxns, well_gra_dct,
+        well_ene_dct, name_dct, postproc_dct, log_name):
+    
+    # hardwired script import until i finish setting up script as callable cli thing
+    current_dir = os.getcwd()
+    bin_path = os.path.join(current_dir, '/home/elliott/Packages/AutoMech/mechdriver/bin')
+    sys.path.insert(0, bin_path)
+    import automated_insert
+
+    mech_str = "REACTIONS     CAL/MOLE     MOLES"
+    for name, rxn in rxns.items():
+
+        name = name.replace(' ','')
+        if name not in postproc_dct:
+            continue
+
+        rxn_dets = postproc_dct[name]
+        _, cla, barrier, ts_geo, _ = rxn_dets
+
+        reacs, prods = name.split('=')
+        if name_dct[reacs] + ' = ' + name_dct[prods] + ' ' in mech_str:
+            continue
+
+        rct_chis = [info[0] for info in well_info_dct[reacs]]
+        rct_mults = [info[2] for info in well_info_dct[reacs]]
+        rct_chgs = [info[1] for info in well_info_dct[reacs]]
+        prd_chis = [info[0] for info in well_info_dct[prods]]
+        prd_mults = [info[2] for info in well_info_dct[prods]]
+        prd_chgs = [info[1] for info in well_info_dct[prods]]
+        rxn_chis = (rct_chis, prd_chis,)
+        rxn_mults = (rct_mults, prd_mults,)
+        rxn_chgs = (rct_chgs, prd_chgs,)
+        rct_gra = well_gra_dct[reacs]
+        rct_gra = automol.graph.union_from_sequence(rct_gra)
+        prd_gra = well_gra_dct[prods]
+        prd_gra = automol.graph.union_from_sequence(prd_gra)
+        if cla == 'TS':
+            ene = well_ene_dct[reacs] * float(barrier)*627.51
+            insert_dct['mult'] = rxn_mults
+            insert_dct['charge'] = rxn_chgs
+            insert_dct['inchi'] = rxn_chis
+            insert_dct['output_string'] = automol.geom.xyz_string(
+                ts_geo, f'{ene:.8f}')
+            insert_dct['forming_bonds'] = rxn[1]
+            insert_dct['breaking_bonds'] = rxn[2]
+            insert_dct['rct_gra'] = rct_gra
+            insert_dct['prd_gra'] = prd_gra
+            if len(rct_chis) > 1:
+                insert_dct['rxn_class'] = "unclassified_bimol"
+            else:
+                insert_dct['rxn_class'] = "unclassified_unimol"
+            try:
+                automated_insert.main(insert_dct)
+                mech_str += '\n' + name_dct[reacs] + ' = ' + name_dct[prods] + '    1.0  0  0'
+            except:
+                write_log('failed to save', log_name)
+                write_log(name_dct[reacs] + ' = ' + name_dct[prods], log_name)
+    
+    mech_str += "\nEND\n"
+    return mech_str
 
 ##################################
 
@@ -405,7 +689,7 @@ Possible commands are:
 - postproc -> runs postprocess on GSM_FOLDS
 '''
  #   commands = ["runcrest","unite","bond_check","selpaths","filter","setup","rungsm"]
-    commands = ["runcrest","selpaths","setup","rungsm","runssm","postproc"]
+    commands = ["runcrest","selpaths","setup","rungsm","runssm","postproc","prepamech"]
     if len(sys.argv) != 2:
         print(message)
         exit()
@@ -481,6 +765,10 @@ Possible commands are:
         run_gsm(True,gsm_theory,reacs_set,prods_set,path_to_log,log_name)
     elif command == 'postproc':
         postproc(gsm_theory,reacs_set,prods_set,path_to_log,log_name)
+    elif command == 'prepamech':
+        prepare_amech_kin(
+            '\n'.join(lines), int(charge), int(spin), 
+            log_name, '/home/elliott/projects/explorer/5_andrearun/GSM_FS/',)
 
 
  #   unite_molgen_xyz("C4H10_geo/",suffix="opt.xyz")

@@ -5,6 +5,32 @@ import csv
 import automol
 from mechanalyzer.builder._names import functional_group_name
 
+INSERT_DCT = {
+    'save_filesystem': './SAVE',
+    'smiles': None,
+    'inchi': None,
+    'mult': None,
+    'charge': None,
+    'rid': None,
+    'cid': None,
+    'theory': None,
+    'program': None,
+    'method': None,
+    'basis': None,
+    'orb_res': None,
+    'input_file': 'string',
+    'output_file': 'string',
+    'input_string': None,
+    'output_string': None,
+    'output_type': 'geo',
+    'ts_locs': None,
+    'ts_mult': None,
+    'rxn_class': None,
+    'zrxn_file': None,
+    'run_path': None,
+    'saddle': False,
+    'trusted': True,
+} 
 # Auxilliary functions (| in the comments means 'or')
 # a. write xyz from list in the form [natom,energy|empty,coords1,...,coordsn]
 def write_xyz(xyz_list,filname):
@@ -19,11 +45,18 @@ def append_xyz(xyz_list,filname):
             f.write(line+'\n')
 
 # b. Write log file
-def write_log(stuff_to_write,log_name,path_to_log=''):
-    with open(f"{path_to_log}{log_name}","a") as f:
-        if type(stuff_to_write) == type('str'): f.write(stuff_to_write+'\n')
-        elif type(stuff_to_write) == type(1): f.write(str(stuff_to_write)+'\n')
+def write_log(stuff_to_write, log_name, path_to_log='', create=False):
+    mode = "w+" if create else "a"
+    if create:
+        if path_to_log:
+            os.makedirs(path_to_log, exist_ok=True)
+        else:
+            os.makedirs(os.path.dirname(log_name), exist_ok=True)
+    with open(f"{path_to_log}{log_name}", mode) as f:
+        if type(stuff_to_write) == type('str'): f.write(stuff_to_write + '\n')
+        elif type(stuff_to_write) == type(1): f.write(str(stuff_to_write) + '\n')
         else: f.writelines(stuff_to_write) # For lists
+
 
 # c. Write all xyz in isomers into file
 def write_xyzlist(xyz_list,filname):
@@ -226,14 +259,14 @@ def setup_from_pickles(reacs_set, prods_set):
         geo_dct[f'species_{i}'] = geo
 
     wells = read_pickle("wells")
-    name_dct = {} # dct of species names
-    for well, gras in wells.items():
-        name_dct[well] = ' + '.join([functional_group_name(
-                         automol.graph.inchi(gra)) for gra in gras])
-    name_dct2 = {} # dct of smiles
-    for well, gras in wells.items():
-        name_dct2[well] = ' + '.join([automol.chi.smiles(
-                           automol.graph.chi(automol.graph.implicit(gra))) for gra in gras])
+    #name_dct = {} # dct of species names
+    #for well, gras in wells.items():
+    #name_dct[well] = ' + '.join([functional_group_name(
+    #                 automol.graph.inchi(gra)) for gra in gras])
+    #name_dct2 = {} # dct of smiles
+    #for well, gras in wells.items():
+    #name_dct2[well] = ' + '.join([automol.chi.smiles(
+    #                   automol.graph.chi(automol.graph.implicit(gra))) for gra in gras])
 
     with open('reactions.csv', 'r') as f:
         gsm_paths = f.read()
@@ -241,13 +274,49 @@ def setup_from_pickles(reacs_set, prods_set):
                 ) for gsm_path in gsm_paths.splitlines()]
 
     # If no indication of reacs or prods, consider all of them
-    if -1 in reacs_set:
+    if '-1' in reacs_set:
         reacs_set = set(wells.keys())
-    if -1 in prods_set:
+    if '-1' in prods_set:
         prods_set = set(wells.keys())
 
-    return rxns,geos,geo_dct,name_dct,name_dct2,wells,gsm_paths,reacs_set,prods_set
+    return rxns, geos, geo_dct, wells, gsm_paths, reacs_set, prods_set
 
+
+def setup_from_pp_pickles(path):
+    with open(f'{path}/pp_geos.pickle', 'rb') as f:
+        geos = pickle.load(f)
+    with open(f'{path}/pp_rxns.pickle', 'rb') as f:
+       rxns = pickle.load(f)
+    with open(f'{path}/postproc.pickle', 'rb') as f:
+        postproc_dct = pickle.load(f)
+    with open(f'{path}/pp_wells.pickle', 'rb') as f:
+        well_gra_dct = pickle.load(f)
+
+    name_dct = {}
+    for well, gras in well_gra_dct.items():
+        name_dct[well] = ' + '.join([functional_group_name(automol.graph.inchi(gra)) for gra in gras])
+
+    with open(f'{path}/allcrestprods_sort.xyz', 'r') as f:
+        well_enes_str = f.read()
+    well_enes = [float(ene) for ene in well_enes_str.splitlines()[1::13]]
+    # well_enes = [(ene - min(well_enes))*627.51 for ene in well_enes]
+    well_ene_dct = {}
+    for i, ene in enumerate(well_enes):
+        well_ene_dct[f'species_{i}'] = ene
+    for name in well_gra_dct.keys():
+        if name not in well_ene_dct:
+            well_ene_dct[name] = 0
+    
+    return rxns, geos, well_gra_dct, well_ene_dct, name_dct, postproc_dct
+
+
+def read_template(program, filename):
+    src_path = os.path.dirname(os.path.realpath(__file__))
+    template_path = os.path.join(src_path, program)
+    file_path = os.path.join(template_path, filename)
+    with open(file_path, 'r') as f:
+        template_str = f.read()
+    return template_str
 
 if __name__ == "__main__":
     process_ensemble_file("crest_msreact_products.xyz")
