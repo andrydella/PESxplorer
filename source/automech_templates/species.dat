@@ -1,0 +1,14 @@
+spc global
+    kickoff = [0.1, False]
+    mc_nsamp = [True, 3, 1, 3, 100, 25]
+    hind_inc = 15.0
+    hbond_cutoffs = [4.61, 1.92]
+    tau_nsamp = [False, 1, 1, 1, 1, 10000]
+end spc
+
+#spc ts_1_1_0
+#ts_search = pst
+#kt_pst = 1.0e-11
+#temp_pst = 600.
+#n_pst = 6.
+#end spc

@@ -1,0 +1,26 @@
+input
+    run_prefix  = RUN_PREFIX 
+    save_prefix  = SAVE_PREFIX
+    canonical = False
+end input
+
+spc
+    1-NUM_SPECIES
+end spc
+
+els
+    spc conf_opt    runlvl=lvl_wbs    inplvl=lvl_b33
+    spc conf_hess    runlvl=lvl_wbs    inplvl=lvl_wbs
+end els
+
+#proc
+end proc
+
+thermo
+    write_mess      kin_model=global  spc_model=global  cnf_range=min nprocs=8
+    run_mess        nprocs=8 kin_model=global  spc_model=global cnf_range=min 
+    run_fits        kin_model=global  spc_model=global cnf_range=min nprocs=8
+end thermo
+
+
+# pes index; species index

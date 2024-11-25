@@ -1,0 +1,32 @@
+input
+    run_prefix  = RUN_PREFIX 
+    save_prefix  = SAVE_PREFIX
+    canonical = False
+end input
+
+pes
+    1:1-NUM_CHANNELS
+end pes
+
+els
+    all conf_opt    runlvl=lvl_wbs    inplvl=lvl_b33
+    all conf_hess    runlvl=lvl_wbs    inplvl=lvl_wbs
+end els
+
+#proc
+end proc
+
+thermo
+    write_mess      kin_model=global  spc_model=global  cnf_range=min nprocs=8
+    run_mess        nprocs=8 kin_model=global  spc_model=global cnf_range=min 
+    run_fits        kin_model=global  spc_model=global cnf_range=min nprocs=8
+end thermo
+
+ktp
+    write_mess      kin_model=global  spc_model=global  cnf_range=min nprocs=8
+    run_mess        nprocs=8 kin_model=global  spc_model=global cnf_range=min 
+    run_fits        kin_model=global  spc_model=global cnf_range=min nprocs=8
+end ktp
+
+
+# pes index; species index
